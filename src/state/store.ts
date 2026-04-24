@@ -1,10 +1,13 @@
-import type { Envelope, Spawn } from '@gen/seq/v1/events_pb';
+import type { Envelope, MapGeometry, Spawn } from '@gen/seq/v1/events_pb';
 
 // In-memory spawn map keyed by spawn id. Events from the daemon mutate
 // this in place; MapCanvas re-reads on each animation frame.
 export class SpawnStore {
   private readonly spawns = new Map<number, Spawn>();
   private zoneShort = '';
+  private zoneLong = '';
+  private playerId = 0;
+  private geometry: MapGeometry | undefined;
   private lastSeq = 0n;
 
   apply(env: Envelope): void {
@@ -14,11 +17,16 @@ export class SpawnStore {
       case 'snapshot': {
         this.spawns.clear();
         this.zoneShort = p.value.zoneShort;
+        this.zoneLong = p.value.zoneLong;
+        this.playerId = p.value.playerId;
+        this.geometry = p.value.geometry;
         for (const s of p.value.spawns) this.spawns.set(s.id, s);
         break;
       }
       case 'zoneChanged':
         this.zoneShort = p.value.zoneShort;
+        this.zoneLong = p.value.zoneLong;
+        this.geometry = p.value.geometry;
         this.spawns.clear();
         break;
       case 'spawnAdded':
@@ -49,5 +57,10 @@ export class SpawnStore {
 
   all(): Spawn[] { return Array.from(this.spawns.values()); }
   zone(): string { return this.zoneShort; }
+  zoneLongName(): string { return this.zoneLong; }
   seq(): bigint { return this.lastSeq; }
+  map(): MapGeometry | undefined { return this.geometry; }
+  player(): Spawn | undefined {
+    return this.playerId ? this.spawns.get(this.playerId) : undefined;
+  }
 }

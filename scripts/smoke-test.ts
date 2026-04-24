@@ -4,8 +4,8 @@
  * comes back. Prints the snapshot contents and exits 0 on success.
  *
  * Usage:
- *   node --loader=ts-node/esm scripts/smoke-test.ts
- *   (or: tsc + run the emitted .js)
+ *   pnpm run smoke          # wraps `tsx scripts/smoke-test.ts`
+ *   SEQ_URL=ws://host:port pnpm run smoke
  *
  * This is a developer convenience, not part of the CI flow yet.
  */
