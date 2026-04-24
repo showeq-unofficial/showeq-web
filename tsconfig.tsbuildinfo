@@ -1,0 +1,1 @@
+{"root":["./src/main.tsx","./src/gen/seq/v1/client_pb.ts","./src/gen/seq/v1/events_pb.ts","./src/net/client.ts","./src/state/store.ts","./src/ui/App.tsx","./src/ui/MapCanvas.tsx"],"version":"5.9.3"}

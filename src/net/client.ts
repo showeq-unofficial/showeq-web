@@ -1,0 +1,76 @@
+import { create, fromBinary, toBinary } from '@bufbuild/protobuf';
+import {
+  ClientEnvelopeSchema,
+  SubscribeSchema,
+  Topic,
+} from '@gen/seq/v1/client_pb';
+import {
+  EnvelopeSchema,
+  type Envelope,
+} from '@gen/seq/v1/events_pb';
+
+export type EnvelopeListener = (env: Envelope) => void;
+
+// Minimal WebSocket client that speaks seq.v1 protobuf. Connects, sends a
+// Subscribe on open, and fans out incoming Envelope messages to listeners.
+// Reconnects with exponential backoff on disconnect — the daemon may be
+// restarted during capture sessions.
+export class SeqClient {
+  private ws?: WebSocket;
+  private listeners = new Set<EnvelopeListener>();
+  private backoffMs = 250;
+  private closed = false;
+
+  constructor(private readonly url: string) {}
+
+  connect(): void {
+    if (this.closed) return;
+    const ws = new WebSocket(this.url);
+    ws.binaryType = 'arraybuffer';
+    this.ws = ws;
+
+    ws.onopen = () => {
+      this.backoffMs = 250;
+      const env = create(ClientEnvelopeSchema, {
+        payload: {
+          case: 'subscribe',
+          value: create(SubscribeSchema, {
+            topics: [Topic.SPAWNS, Topic.ZONE, Topic.PLAYER],
+          }),
+        },
+      });
+      ws.send(toBinary(ClientEnvelopeSchema, env));
+    };
+
+    ws.onmessage = (ev) => {
+      if (!(ev.data instanceof ArrayBuffer)) return;
+      const bytes = new Uint8Array(ev.data);
+      try {
+        const env = fromBinary(EnvelopeSchema, bytes);
+        for (const l of this.listeners) l(env);
+      } catch (err) {
+        console.warn('failed to decode Envelope', err);
+      }
+    };
+
+    ws.onclose = () => this.scheduleReconnect();
+    ws.onerror = () => ws.close();
+  }
+
+  close(): void {
+    this.closed = true;
+    this.ws?.close();
+  }
+
+  onEnvelope(fn: EnvelopeListener): () => void {
+    this.listeners.add(fn);
+    return () => { this.listeners.delete(fn); };
+  }
+
+  private scheduleReconnect(): void {
+    if (this.closed) return;
+    const delay = this.backoffMs;
+    this.backoffMs = Math.min(this.backoffMs * 2, 5_000);
+    setTimeout(() => this.connect(), delay);
+  }
+}
