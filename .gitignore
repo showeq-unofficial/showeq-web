@@ -1,0 +1,14 @@
+node_modules/
+dist/
+dist-ssr/
+.vite/
+.DS_Store
+*.log
+.env
+.env.local
+coverage/
+playwright-report/
+test-results/
+
+# Generated protobuf bindings (produced by `pnpm run gen`)
+src/gen/
