@@ -1,0 +1,40 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: checkout proto alongside
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/showeq-proto
+          path: ../showeq-proto
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run gen
+      - run: pnpm run typecheck
+      - run: pnpm run test
+      - run: pnpm run build
+
+      - name: playwright deps
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: e2e
+        run: pnpm run test:e2e
+        # Playwright specs don't exist yet; CI will short-circuit cleanly.
+        if: hashFiles('tests/**/*.spec.ts') != ''
