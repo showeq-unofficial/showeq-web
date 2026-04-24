@@ -174,12 +174,12 @@ export function App() {
           <div className="flex w-1/4 min-w-[260px] flex-col border-l border-neutral-800">
             {visibility.stats && (
               <Panel title="Stats" onClose={() => hidePanel('stats')}>
-                <StatsPanel />
+                <StatsPanel store={store} tick={tick} />
               </Panel>
             )}
             {visibility.group && (
               <Panel title="Group" onClose={() => hidePanel('group')}>
-                <GroupPanel />
+                <GroupPanel store={store} tick={tick} />
               </Panel>
             )}
             {visibility.chat && (
@@ -188,7 +188,7 @@ export function App() {
                 onClose={() => hidePanel('chat')}
                 className="min-h-0 flex-1"
               >
-                <ChatLog />
+                <ChatLog store={store} tick={tick} />
               </Panel>
             )}
           </div>

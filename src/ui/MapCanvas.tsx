@@ -58,6 +58,7 @@ export function MapCanvas({
   const [visibleLayers, setVisibleLayers] = useState<Set<number>>(new Set());
   const visibleLayersRef = useRef(visibleLayers);
   useEffect(() => { visibleLayersRef.current = visibleLayers; }, [visibleLayers]);
+  const [overlayCollapsed, setOverlayCollapsed] = useState(false);
 
   // Detect zone change → reset view + show all layers in the new geometry.
   useEffect(() => {
@@ -244,6 +245,14 @@ export function MapCanvas({
       for (const s of spawns) {
         if (s.id === player?.id) continue;
         const [px, py] = project(s.pos?.x ?? 0, s.pos?.y ?? 0);
+        // Group-member ring (under selection ring so selection wins).
+        if (store.isGroupSpawn(s.id)) {
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(px, py, 6, 0, Math.PI * 2);
+          ctx.stroke();
+        }
         if (s.id === selId) {
           ctx.strokeStyle = '#ffd24a';
           ctx.lineWidth = 2;
@@ -386,18 +395,43 @@ export function MapCanvas({
         ref={canvasRef}
         className="block cursor-grab active:cursor-grabbing"
       />
-      <div className="absolute right-2 top-2 min-w-[160px] rounded border border-neutral-800 bg-bg-panel/95 p-2 text-xs shadow-md backdrop-blur">
-        <div className="mb-1 flex items-center justify-between gap-2">
-          <span className="font-medium text-neutral-300">Layers</span>
+      <div
+        className={
+          'absolute right-2 top-2 rounded border border-neutral-800 bg-bg-panel/95 text-xs shadow-md backdrop-blur ' +
+          (overlayCollapsed ? '' : 'min-w-[160px] p-2')
+        }
+      >
+        <div
+          className={
+            'flex items-center justify-between gap-2 ' +
+            (overlayCollapsed ? 'p-1' : 'mb-1')
+          }
+        >
           <button
             type="button"
-            onClick={resetView}
-            className="rounded border border-neutral-700 bg-bg-alt px-1.5 py-0.5 text-[10px] text-neutral-300 hover:bg-bg-base"
-            title="Reset zoom + pan"
+            onClick={() => setOverlayCollapsed((c) => !c)}
+            className="text-neutral-400 hover:text-neutral-200"
+            title={overlayCollapsed ? 'Expand layers' : 'Collapse layers'}
+            aria-label={overlayCollapsed ? 'Expand layers' : 'Collapse layers'}
           >
-            reset view
+            {overlayCollapsed ? '▸' : '▾'}
           </button>
+          {!overlayCollapsed && (
+            <>
+              <span className="flex-1 font-medium text-neutral-300">Layers</span>
+              <button
+                type="button"
+                onClick={resetView}
+                className="rounded border border-neutral-700 bg-bg-alt px-1.5 py-0.5 text-[10px] text-neutral-300 hover:bg-bg-base"
+                title="Reset zoom + pan"
+              >
+                reset view
+              </button>
+            </>
+          )}
         </div>
+        {!overlayCollapsed && (
+        <>
         <label className="mb-2 flex items-center gap-1 text-[11px] text-neutral-400">
           <span className="w-7 shrink-0">FOV</span>
           <input
@@ -448,6 +482,8 @@ export function MapCanvas({
               </button>
             </div>
           </>
+        )}
+        </>
         )}
       </div>
     </div>

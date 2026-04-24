@@ -93,9 +93,14 @@ export function SpawnList({
   const [sorting, setSorting] = useState<SortingState>([
     { id: 'distance', desc: false },
   ]);
-  // Bitmask of filter flags that will *hide* a matching spawn. A spawn is
-  // hidden if any of its filter_flags bits are also set in `hidden`.
-  const [hidden, setHidden] = useState<number>(1 << 5); // default: hide "Filtered"
+  // Filter mode: 0 = "All spawns", any other value = the FilterMgr bit
+  // a spawn must match to be shown. Mirrors the showeq-c spawnlist2
+  // category combo box's "select a view" UX, minimally — full Category
+  // support (named user categories with their own filter rules) is a
+  // Phase 5 item.
+  const [showOnly, setShowOnly] = useState<number>(0);
+  const [hideFiltered, setHideFiltered] = useState(true);
+  const FILTERED_BIT = 1 << 5;
 
   const rows = useMemo<Row[]>(() => {
     // `tick` is just a dependency to force recomputation each frame.
@@ -105,7 +110,8 @@ export function SpawnList({
     const out: Row[] = [];
     for (const s of store.all()) {
       if (s.type === SpawnType.DOOR || s.type === SpawnType.DROP) continue;
-      if (hidden && (s.filterFlags & hidden) !== 0) continue;
+      if (hideFiltered && (s.filterFlags & FILTERED_BIT) !== 0) continue;
+      if (showOnly !== 0 && (s.filterFlags & showOnly) === 0) continue;
       const d2 = player && s.id !== player.id ? distanceSq(s, player) : 0;
       const hpPct = s.hpMax > 0 ? (s.hpCur / s.hpMax) * 100 : -1;
       out.push({
@@ -121,7 +127,7 @@ export function SpawnList({
       });
     }
     return out;
-  }, [store, hidden, tick]);
+  }, [store, showOnly, hideFiltered, tick]);
 
   const table = useReactTable({
     data: rows,
@@ -132,30 +138,31 @@ export function SpawnList({
     getSortedRowModel: getSortedRowModel(),
   });
 
-  const toggleFilter = (bit: number) => {
-    setHidden((h) => h ^ bit);
-  };
-
   return (
     <div className="flex h-full flex-col">
-      <div className="border-b border-neutral-800 px-2 py-1.5">
-        <div className="mb-1 text-xs font-medium text-neutral-400">Hide categories</div>
-        <div className="flex flex-wrap gap-x-2 gap-y-1">
-          {FILTERS.map((f) => (
-            <label
-              key={f.bit}
-              className="flex cursor-pointer items-center gap-1 text-[11px] text-neutral-300"
-            >
-              <input
-                type="checkbox"
-                checked={(hidden & f.bit) !== 0}
-                onChange={() => toggleFilter(f.bit)}
-                className="h-3 w-3 accent-blue-500"
-              />
-              {f.label}
-            </label>
-          ))}
-        </div>
+      <div className="flex items-center gap-2 border-b border-neutral-800 px-2 py-1.5 text-[11px] text-neutral-400">
+        <label className="flex items-center gap-1">
+          <span>Show</span>
+          <select
+            value={showOnly}
+            onChange={(e) => setShowOnly(Number(e.target.value))}
+            className="rounded border border-neutral-700 bg-bg-base px-1 py-0.5 text-xs text-neutral-200 focus:border-blue-500 focus:outline-none"
+          >
+            <option value={0}>All</option>
+            {FILTERS.filter((f) => f.label !== 'Filtered').map((f) => (
+              <option key={f.bit} value={f.bit}>{f.label}</option>
+            ))}
+          </select>
+        </label>
+        <label className="flex cursor-pointer items-center gap-1">
+          <input
+            type="checkbox"
+            checked={hideFiltered}
+            onChange={(e) => setHideFiltered(e.target.checked)}
+            className="h-3 w-3 accent-blue-500"
+          />
+          Hide Filtered
+        </label>
       </div>
       <div className="flex items-center justify-between border-b border-neutral-800 px-2 py-1 text-[11px] text-neutral-400">
         <span>{rows.length} spawn{rows.length === 1 ? '' : 's'}</span>
