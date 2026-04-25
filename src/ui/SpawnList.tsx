@@ -13,6 +13,7 @@ import type { SpawnStore } from '../state/store';
 import { CategorySelect } from './CategorySelect';
 import { classNameOf } from './classes';
 import { conHex, conOf } from './concolor';
+import { tintForFilterFlags } from './filterflags';
 
 type Row = {
   id: number;
@@ -166,11 +167,17 @@ export function SpawnList({
             onChange={setCategoryFilter}
             options={[
               { id: -1, name: 'All' },
-              ...categories.map((c) => ({
-                id: c.id,
-                name: c.name,
-                color: c.color || undefined,
-              })),
+              // Drop the seqdef Category1 "All" (regex ".") since our
+              // synthetic id=-1 above already provides the same "no
+              // filter" affordance — without this filter the dropdown
+              // shows two entries labeled "All".
+              ...categories
+                .filter((c) => c.name !== 'All')
+                .map((c) => ({
+                  id: c.id,
+                  name: c.name,
+                  color: c.color || undefined,
+                })),
             ]}
           />
         </div>
@@ -215,6 +222,7 @@ export function SpawnList({
           <tbody>
             {table.getRowModel().rows.map((r) => {
               const isSelected = r.original.id === selectedId;
+              const filterTint = tintForFilterFlags(r.original.filterFlags);
               return (
                 <tr
                   key={r.id}
@@ -223,6 +231,8 @@ export function SpawnList({
                     'cursor-pointer border-b border-neutral-900 ' +
                     (isSelected
                       ? 'bg-blue-900/40 hover:bg-blue-900/60'
+                      : filterTint
+                      ? `${filterTint} hover:bg-bg-alt/60`
                       : 'hover:bg-bg-alt/60')
                   }
                 >
