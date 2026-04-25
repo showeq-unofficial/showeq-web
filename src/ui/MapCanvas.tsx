@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { SpawnStore } from '../state/store';
 import { SpawnType } from '@gen/seq/v1/events_pb';
+import { conHex, conOf } from './concolor';
 
+// Fallback color when con-color isn't applicable: doors/drops have no
+// level, and PC/NPC fall through here only before the player level
+// syncs. Corpses get con-colored alongside live spawns to match the
+// spawn list.
 const COLOR_BY_TYPE: Record<number, string> = {
   [SpawnType.PC]:         '#6ec4ff',
   [SpawnType.NPC]:        '#ff6b6b',
@@ -242,6 +247,7 @@ export function MapCanvas({
 
       // Spawns.
       const selId = selectedIdRef.current;
+      const pLevel = player?.level ?? 0;
       for (const s of spawns) {
         if (s.id === player?.id) continue;
         const [px, py] = project(s.pos?.x ?? 0, s.pos?.y ?? 0);
@@ -260,7 +266,10 @@ export function MapCanvas({
           ctx.arc(px, py, 8, 0, Math.PI * 2);
           ctx.stroke();
         }
-        ctx.fillStyle = COLOR_BY_TYPE[s.type] ?? '#ffffff';
+        ctx.fillStyle =
+          pLevel > 0 && s.level > 0
+            ? conHex(conOf(pLevel, s.level))
+            : COLOR_BY_TYPE[s.type] ?? '#ffffff';
         ctx.beginPath();
         ctx.arc(px, py, 3, 0, Math.PI * 2);
         ctx.fill();
