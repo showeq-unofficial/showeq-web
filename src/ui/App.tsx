@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { SeqClient } from '../net/client';
 import { SpawnStore } from '../state/store';
 import { ChatLog } from './ChatLog';
 import { GroupPanel } from './GroupPanel';
 import { MapCanvas } from './MapCanvas';
 import { Panel } from './Panel';
+import { ResizeHandle } from './ResizeHandle';
 import { SpawnList } from './SpawnList';
 import { StatsPanel } from './StatsPanel';
 
@@ -13,6 +14,34 @@ type ConnStatus = 'disconnected' | 'connecting' | 'open';
 const DEFAULT_URL = `ws://${window.location.hostname || 'localhost'}:9090`;
 const URL_STORAGE_KEY = 'showeq.daemonUrl';
 const PANEL_STORAGE_KEY = 'showeq.panels';
+const RAIL_WIDTH_STORAGE_KEY = 'showeq.railWidths';
+
+// Pixel constraints on rail widths. Center map gets the rest, with its
+// own min-w-[300px] so rails can't crush it down to a sliver.
+const RAIL_MIN = 200;
+const RAIL_MAX = 600;
+const DEFAULT_LEFT_WIDTH = 320;
+const DEFAULT_RIGHT_WIDTH = 320;
+
+type RailWidths = { left: number; right: number };
+
+function loadRailWidths(): RailWidths {
+  try {
+    const raw = localStorage.getItem(RAIL_WIDTH_STORAGE_KEY);
+    if (!raw) return { left: DEFAULT_LEFT_WIDTH, right: DEFAULT_RIGHT_WIDTH };
+    const parsed = JSON.parse(raw) as Partial<RailWidths>;
+    return {
+      left:  clampRail(parsed.left  ?? DEFAULT_LEFT_WIDTH),
+      right: clampRail(parsed.right ?? DEFAULT_RIGHT_WIDTH),
+    };
+  } catch {
+    return { left: DEFAULT_LEFT_WIDTH, right: DEFAULT_RIGHT_WIDTH };
+  }
+}
+
+function clampRail(w: number): number {
+  return Math.max(RAIL_MIN, Math.min(RAIL_MAX, w));
+}
 
 const STATUS_BADGE: Record<ConnStatus, string> = {
   open:         'bg-emerald-700 text-emerald-100',
@@ -56,6 +85,7 @@ export function App() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [selectVersion, setSelectVersion] = useState(0);
   const [visibility, setVisibility] = useState<Record<PanelKey, boolean>>(() => loadVisibility());
+  const [railWidths, setRailWidths] = useState<RailWidths>(() => loadRailWidths());
 
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 250);
@@ -65,6 +95,18 @@ export function App() {
   useEffect(() => {
     localStorage.setItem(PANEL_STORAGE_KEY, JSON.stringify(visibility));
   }, [visibility]);
+
+  useEffect(() => {
+    localStorage.setItem(RAIL_WIDTH_STORAGE_KEY, JSON.stringify(railWidths));
+  }, [railWidths]);
+
+  const onLeftResize = useCallback((dx: number) => {
+    setRailWidths((w) => ({ ...w, left: clampRail(w.left + dx) }));
+  }, []);
+  const onRightResize = useCallback((dx: number) => {
+    // Right rail grows when you drag the handle leftward.
+    setRailWidths((w) => ({ ...w, right: clampRail(w.right - dx) }));
+  }, []);
 
   const togglePanel = (key: PanelKey) =>
     setVisibility((v) => ({ ...v, [key]: !v[key] }));
@@ -145,24 +187,30 @@ export function App() {
       </header>
       <div className="flex min-h-0 flex-1">
         {showLeftRail && (
-          <div className="flex w-1/4 min-w-[240px] flex-col border-r border-neutral-800">
-            {visibility.spawns && (
-              <Panel
-                title="Spawns"
-                onClose={() => hidePanel('spawns')}
-                className="min-h-0 flex-1"
-              >
-                <SpawnList
-                  store={store}
-                  tick={tick}
-                  selectedId={selectedId}
-                  onSelect={onSelect}
-                />
-              </Panel>
-            )}
-          </div>
+          <>
+            <div
+              className="flex shrink-0 flex-col"
+              style={{ width: `${railWidths.left}px` }}
+            >
+              {visibility.spawns && (
+                <Panel
+                  title="Spawns"
+                  onClose={() => hidePanel('spawns')}
+                  className="min-h-0 flex-1"
+                >
+                  <SpawnList
+                    store={store}
+                    tick={tick}
+                    selectedId={selectedId}
+                    onSelect={onSelect}
+                  />
+                </Panel>
+              )}
+            </div>
+            <ResizeHandle onDrag={onLeftResize} />
+          </>
         )}
-        <div className="min-w-0 flex-1">
+        <div className="min-w-[300px] flex-1">
           <MapCanvas
             store={store}
             tick={tick}
@@ -171,27 +219,33 @@ export function App() {
           />
         </div>
         {showRightRail && (
-          <div className="flex w-1/4 min-w-[260px] flex-col border-l border-neutral-800">
-            {visibility.stats && (
-              <Panel title="Stats" onClose={() => hidePanel('stats')}>
-                <StatsPanel store={store} tick={tick} />
-              </Panel>
-            )}
-            {visibility.group && (
-              <Panel title="Group" onClose={() => hidePanel('group')}>
-                <GroupPanel store={store} tick={tick} />
-              </Panel>
-            )}
-            {visibility.chat && (
-              <Panel
-                title="Chat"
-                onClose={() => hidePanel('chat')}
-                className="min-h-0 flex-1"
-              >
-                <ChatLog store={store} tick={tick} />
-              </Panel>
-            )}
-          </div>
+          <>
+            <ResizeHandle onDrag={onRightResize} />
+            <div
+              className="flex shrink-0 flex-col"
+              style={{ width: `${railWidths.right}px` }}
+            >
+              {visibility.stats && (
+                <Panel title="Stats" onClose={() => hidePanel('stats')}>
+                  <StatsPanel store={store} tick={tick} />
+                </Panel>
+              )}
+              {visibility.group && (
+                <Panel title="Group" onClose={() => hidePanel('group')}>
+                  <GroupPanel store={store} tick={tick} />
+                </Panel>
+              )}
+              {visibility.chat && (
+                <Panel
+                  title="Chat"
+                  onClose={() => hidePanel('chat')}
+                  className="min-h-0 flex-1"
+                >
+                  <ChatLog store={store} tick={tick} />
+                </Panel>
+              )}
+            </div>
+          </>
         )}
       </div>
     </main>
