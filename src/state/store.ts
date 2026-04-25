@@ -1,5 +1,7 @@
 import type {
+  BuffsUpdate,
   ChatMessage,
+  CombatEvent,
   Envelope,
   GroupUpdate,
   MapGeometry,
@@ -11,7 +13,13 @@ import type {
 // so the React render key is stable across re-renders.
 export type ChatEntry = ChatMessage & { seq: bigint };
 
+// One combat-log line: same pattern; we also stamp the local arrival
+// time so the UI can show "12s ago" style relative timestamps if it
+// wants to (currently unused).
+export type CombatEntry = CombatEvent & { seq: bigint; localTs: number };
+
 const CHAT_HISTORY_LIMIT = 500;
+const COMBAT_HISTORY_LIMIT = 500;
 
 // In-memory spawn map keyed by spawn id. Events from the daemon mutate
 // this in place; MapCanvas re-reads on each animation frame.
@@ -23,9 +31,11 @@ export class SpawnStore {
   private geometry: MapGeometry | undefined;
   private playerStats: PlayerStats | undefined;
   private group: GroupUpdate | undefined;
-  // Bounded ring buffer of recent chat lines, oldest first. The render
-  // layer reads this directly; growth is capped at CHAT_HISTORY_LIMIT.
+  private buffs: BuffsUpdate | undefined;
+  // Bounded ring buffers (oldest first). Growth capped at the *_LIMIT
+  // constants above to prevent unbounded memory in long sessions.
   private chat: ChatEntry[] = [];
+  private combat: CombatEntry[] = [];
   private lastSeq = 0n;
 
   apply(env: Envelope): void {
@@ -81,6 +91,20 @@ export class SpawnStore {
       case 'group':
         this.group = p.value;
         break;
+      case 'buffs':
+        this.buffs = p.value;
+        break;
+      case 'combat': {
+        this.combat.push({
+          ...p.value,
+          seq: env.seq,
+          localTs: Date.now(),
+        });
+        if (this.combat.length > COMBAT_HISTORY_LIMIT) {
+          this.combat.splice(0, this.combat.length - COMBAT_HISTORY_LIMIT);
+        }
+        break;
+      }
       default:
         break;
     }
@@ -96,7 +120,9 @@ export class SpawnStore {
   }
   stats(): PlayerStats | undefined { return this.playerStats; }
   chatLog(): ReadonlyArray<ChatEntry> { return this.chat; }
+  combatLog(): ReadonlyArray<CombatEntry> { return this.combat; }
   groupState(): GroupUpdate | undefined { return this.group; }
+  buffsState(): BuffsUpdate | undefined { return this.buffs; }
 
   // Quick membership check used by MapCanvas to highlight group members.
   isGroupSpawn(spawnId: number): boolean {

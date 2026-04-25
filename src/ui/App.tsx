@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { SeqClient } from '../net/client';
 import { SpawnStore } from '../state/store';
+import { BuffsPanel } from './BuffsPanel';
 import { ChatLog } from './ChatLog';
+import { CombatLog } from './CombatLog';
 import { GroupPanel } from './GroupPanel';
 import { MapCanvas } from './MapCanvas';
 import { Panel } from './Panel';
@@ -49,18 +51,22 @@ const STATUS_BADGE: Record<ConnStatus, string> = {
   disconnected: 'bg-red-800 text-red-100',
 };
 
-type PanelKey = 'spawns' | 'stats' | 'group' | 'chat';
+type PanelKey = 'spawns' | 'stats' | 'buffs' | 'group' | 'chat' | 'combat';
 const PANEL_DEFS: { key: PanelKey; label: string }[] = [
   { key: 'spawns', label: 'Spawns' },
   { key: 'stats',  label: 'Stats'  },
+  { key: 'buffs',  label: 'Buffs'  },
   { key: 'group',  label: 'Group'  },
   { key: 'chat',   label: 'Chat'   },
+  { key: 'combat', label: 'Combat' },
 ];
 const DEFAULT_VISIBILITY: Record<PanelKey, boolean> = {
   spawns: true,
   stats:  true,
+  buffs:  false,
   group:  true,
   chat:   true,
+  combat: false,
 };
 
 function loadVisibility(): Record<PanelKey, boolean> {
@@ -146,7 +152,9 @@ export function App() {
   }, [store, url]);
 
   const showLeftRail = visibility.spawns;
-  const showRightRail = visibility.stats || visibility.group || visibility.chat;
+  const showRightRail =
+    visibility.stats || visibility.buffs || visibility.group ||
+    visibility.chat  || visibility.combat;
 
   return (
     <main className="flex h-screen w-screen flex-col bg-bg-base text-neutral-200">
@@ -230,9 +238,23 @@ export function App() {
                   <StatsPanel store={store} tick={tick} />
                 </Panel>
               )}
+              {visibility.buffs && (
+                <Panel title="Buffs" onClose={() => hidePanel('buffs')}>
+                  <BuffsPanel store={store} tick={tick} />
+                </Panel>
+              )}
               {visibility.group && (
                 <Panel title="Group" onClose={() => hidePanel('group')}>
                   <GroupPanel store={store} tick={tick} />
+                </Panel>
+              )}
+              {visibility.combat && (
+                <Panel
+                  title="Combat"
+                  onClose={() => hidePanel('combat')}
+                  className="min-h-0 flex-1"
+                >
+                  <CombatLog store={store} tick={tick} />
                 </Panel>
               )}
               {visibility.chat && (
