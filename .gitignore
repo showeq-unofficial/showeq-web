@@ -12,3 +12,6 @@ test-results/
 
 # Generated protobuf bindings (produced by `pnpm run gen`)
 src/gen/
+
+# tsc incremental build cache
+tsconfig.tsbuildinfo
