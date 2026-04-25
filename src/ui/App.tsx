@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SeqClient } from '../net/client';
+import { localPrefs } from '../state/localPrefs';
 import { SpawnStore } from '../state/store';
 import { BuffsPanel } from './BuffsPanel';
 import { ChatLog } from './ChatLog';
@@ -143,7 +144,27 @@ export function App() {
     const client = new SeqClient(url);
     clientRef.current = client;
     const detachEnv = client.onEnvelope((env) => store.apply(env));
-    const ws = { detach: () => { client.close(); detachEnv(); } };
+    // Drive UI selection from /consider and target packets when the
+    // user opted in via PreferencesPanel. localPrefs reads from
+    // localStorage on each event so toggles take effect immediately —
+    // no need to re-subscribe when the user flips them.
+    const detachSelect = client.onEnvelope((env) => {
+      const p = env.payload;
+      // Mirrors showeq-c interface.cpp:5035-5061: deselect-on-untarget
+      // runs independently of select-on-target — clearing the target
+      // can drop the current selection even with select-on-target off.
+      if (p.case === 'considered' && p.value.spawnId &&
+          localPrefs.selectOnConsider()) {
+        onSelect(p.value.spawnId);
+      } else if (p.case === 'targeted') {
+        if (p.value.spawnId === 0) {
+          if (localPrefs.deselectOnUntarget()) onSelect(null);
+        } else if (localPrefs.selectOnTarget()) {
+          onSelect(p.value.spawnId);
+        }
+      }
+    });
+    const ws = { detach: () => { client.close(); detachEnv(); detachSelect(); } };
 
     const poll = setInterval(() => {
       const w = (client as unknown as { ws?: WebSocket }).ws;

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { SeqClient } from '../net/client';
+import { localPrefs } from '../state/localPrefs';
 import type { SpawnStore } from '../state/store';
 
 // Preferences tab body. v1 only edits the chat-timestamp format string;
@@ -33,8 +34,60 @@ export function PreferencesPanel({
     client.setPref('Interface', 'DateTimeFormat', { stringValue: dtfDraft });
   };
 
+  const [selectOnCon, setSelectOnCon] = useState(() => localPrefs.selectOnConsider());
+  const [selectOnTarget, setSelectOnTarget] = useState(() => localPrefs.selectOnTarget());
+  const [deselectOnUntarget, setDeselectOnUntarget] = useState(() => localPrefs.deselectOnUntarget());
+  const updateSelectOnCon = (v: boolean) => {
+    setSelectOnCon(v);
+    localPrefs.setSelectOnConsider(v);
+  };
+  const updateSelectOnTarget = (v: boolean) => {
+    setSelectOnTarget(v);
+    localPrefs.setSelectOnTarget(v);
+  };
+  const updateDeselectOnUntarget = (v: boolean) => {
+    setDeselectOnUntarget(v);
+    localPrefs.setDeselectOnUntarget(v);
+  };
+
   return (
     <div className="flex flex-col gap-4 px-4 py-4 text-xs">
+      <section className="flex flex-col gap-2">
+        <label className="text-[11px] uppercase tracking-wide text-neutral-400">
+          Selection
+        </label>
+        <label className="flex cursor-pointer items-center gap-2">
+          <input
+            type="checkbox"
+            checked={selectOnCon}
+            onChange={(e) => updateSelectOnCon(e.target.checked)}
+            className="h-3 w-3 accent-blue-500"
+          />
+          <span>Select spawn on consider</span>
+        </label>
+        <label className="flex cursor-pointer items-center gap-2">
+          <input
+            type="checkbox"
+            checked={selectOnTarget}
+            onChange={(e) => updateSelectOnTarget(e.target.checked)}
+            className="h-3 w-3 accent-blue-500"
+          />
+          <span>Select spawn on target</span>
+        </label>
+        <label className="flex cursor-pointer items-center gap-2">
+          <input
+            type="checkbox"
+            checked={deselectOnUntarget}
+            onChange={(e) => updateDeselectOnUntarget(e.target.checked)}
+            className="h-3 w-3 accent-blue-500"
+          />
+          <span>Deselect spawn on untarget</span>
+        </label>
+        <p className="text-neutral-500">
+          When enabled, /consider or targeting a spawn in-game updates the
+          highlighted spawn here. Stored per browser.
+        </p>
+      </section>
       <section className="flex flex-col gap-1">
         <label className="text-[11px] uppercase tracking-wide text-neutral-400">
           Chat timestamp format
