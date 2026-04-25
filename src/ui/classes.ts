@@ -1,6 +1,7 @@
-// Mirrors the player-class lookup in showeq-daemon/src/classes.h.
-// Only the 16 player classes — GMs and NPC types are out of scope for
-// the stats panel.
+// Mirrors the player + NPC class lookup in showeq-daemon/src/classes.h.
+// Player classes are ids 1..16, GM variants 20..35, NPC service classes
+// scattered above 40. Anything missing returns "" so callers render
+// blank rather than a stray number.
 const CLASSES: Record<number, string> = {
   1:  'Warrior',
   2:  'Cleric',
@@ -18,6 +19,37 @@ const CLASSES: Record<number, string> = {
   14: 'Enchanter',
   15: 'Beastlord',
   16: 'Berserker',
+  20: 'Warrior GM',
+  21: 'Cleric GM',
+  22: 'Paladin GM',
+  23: 'Ranger GM',
+  24: 'ShadowKnight GM',
+  25: 'Druid GM',
+  26: 'Monk GM',
+  27: 'Bard GM',
+  28: 'Rogue GM',
+  29: 'Shaman GM',
+  30: 'Necromancer GM',
+  31: 'Wizard GM',
+  32: 'Magician GM',
+  33: 'Enchanter GM',
+  34: 'Beastlord GM',
+  35: 'Berserker GM',
+  40: 'Banker',
+  41: 'Shopkeeper',
+  59: 'Discord Merchant',
+  60: 'LDoN Recruiter',
+  61: 'LDoN Merchant',
+  62: 'LDoN Object',
+  63: 'Tribute Master',
+  64: 'Guild Tribute Master',
+  66: 'Guild Banker',
+  67: "Norrath's Keepers Merchant",
+  68: 'Dark Reign Merchant',
+  69: 'Fellowship Registrar',
+  70: 'Alt Currency Merchant',
+  71: 'Mercenary Liaison',
+  73: 'Loyalist Merchant',
 };
 
 export function classNameOf(id: number): string {

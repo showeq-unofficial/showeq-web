@@ -10,8 +10,9 @@ import {
 import type { Spawn } from '@gen/seq/v1/events_pb';
 import { SpawnType } from '@gen/seq/v1/events_pb';
 import type { SpawnStore } from '../state/store';
+import { CategorySelect } from './CategorySelect';
+import { classNameOf } from './classes';
 import { conHex, conOf } from './concolor';
-import { FILTERS } from './filterflags';
 
 type Row = {
   id: number;
@@ -49,8 +50,18 @@ const columns = [
     size: 40,
   }),
   columnHelper.accessor('klass', {
-    header: 'Cls',
-    size: 40,
+    header: 'Class',
+    size: 80,
+    // Full class name from showeq-daemon/src/classes.h — covers the 16
+    // player classes, GM variants, and NPC service roles (Shopkeeper,
+    // Banker, etc.). Untyped NPCs (id 0) render blank.
+    cell: (info) => {
+      const id = info.getValue();
+      const name = classNameOf(id);
+      return (
+        <span className="block truncate" title={name}>{name}</span>
+      );
+    },
   }),
   columnHelper.accessor('hpPct', {
     header: 'HP',
@@ -93,14 +104,16 @@ export function SpawnList({
   const [sorting, setSorting] = useState<SortingState>([
     { id: 'distance', desc: false },
   ]);
-  // Filter mode: 0 = "All spawns", any other value = the FilterMgr bit
-  // a spawn must match to be shown. Mirrors the showeq-c spawnlist2
-  // category combo box's "select a view" UX, minimally — full Category
-  // support (named user categories with their own filter rules) is a
-  // Phase 5 item.
-  const [showOnly, setShowOnly] = useState<number>(0);
+  // Filter mode: -1 = "All spawns", any non-negative integer = a
+  // CategoryMgr category id (= index into the latest CategoriesUpdate)
+  // that the spawn must match. Matches the showeq-c spawnlist2 category-
+  // combo UX directly; user categories ship from seqdef.xml so the list
+  // is non-empty by default.
+  const [categoryFilter, setCategoryFilter] = useState<number>(-1);
   const [hideFiltered, setHideFiltered] = useState(true);
   const FILTERED_BIT = 1 << 5;
+  const categoriesState = store.categoriesState();
+  const categories = categoriesState?.categories ?? [];
 
   const rows = useMemo<Row[]>(() => {
     // `tick` is just a dependency to force recomputation each frame.
@@ -111,12 +124,17 @@ export function SpawnList({
     for (const s of store.all()) {
       if (s.type === SpawnType.DOOR || s.type === SpawnType.DROP) continue;
       if (hideFiltered && (s.filterFlags & FILTERED_BIT) !== 0) continue;
-      if (showOnly !== 0 && (s.filterFlags & showOnly) === 0) continue;
+      if (categoryFilter >= 0 &&
+          !s.categoryIds.includes(categoryFilter)) continue;
       const d2 = player && s.id !== player.id ? distanceSq(s, player) : 0;
       const hpPct = s.hpMax > 0 ? (s.hpCur / s.hpMax) * 100 : -1;
+      // Match showeq-c spawnlistcommon.cpp:196 format: append the
+      // last_name (NPC title / merchant role) in parentheses when set.
+      const baseName = s.name || '(unnamed)';
+      const display = s.lastName ? `${baseName} (${s.lastName})` : baseName;
       out.push({
         id: s.id,
-        name: s.name || '(unnamed)',
+        name: display,
         level: s.level,
         klass: s.class,
         hpPct,
@@ -127,7 +145,7 @@ export function SpawnList({
       });
     }
     return out;
-  }, [store, showOnly, hideFiltered, tick]);
+  }, [store, categoryFilter, hideFiltered, tick]);
 
   const table = useReactTable({
     data: rows,
@@ -141,19 +159,21 @@ export function SpawnList({
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-2 border-b border-neutral-800 px-2 py-1.5 text-[11px] text-neutral-400">
-        <label className="flex items-center gap-1">
-          <span>Show</span>
-          <select
-            value={showOnly}
-            onChange={(e) => setShowOnly(Number(e.target.value))}
-            className="rounded border border-neutral-700 bg-bg-base px-1 py-0.5 text-xs text-neutral-200 focus:border-blue-500 focus:outline-none"
-          >
-            <option value={0}>All</option>
-            {FILTERS.filter((f) => f.label !== 'Filtered').map((f) => (
-              <option key={f.bit} value={f.bit}>{f.label}</option>
-            ))}
-          </select>
-        </label>
+        <div className="flex items-center gap-1">
+          <span>Category</span>
+          <CategorySelect
+            value={categoryFilter}
+            onChange={setCategoryFilter}
+            options={[
+              { id: -1, name: 'All' },
+              ...categories.map((c) => ({
+                id: c.id,
+                name: c.name,
+                color: c.color || undefined,
+              })),
+            ]}
+          />
+        </div>
         <label className="flex cursor-pointer items-center gap-1">
           <input
             type="checkbox"
