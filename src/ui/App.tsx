@@ -4,11 +4,12 @@ import { SpawnStore } from '../state/store';
 import { BuffsPanel } from './BuffsPanel';
 import { ChatLog } from './ChatLog';
 import { CombatLog } from './CombatLog';
-import { FilterRulesPanel } from './FilterRulesPanel';
 import { GroupPanel } from './GroupPanel';
 import { MapCanvas } from './MapCanvas';
 import { Panel } from './Panel';
 import { ResizeHandle } from './ResizeHandle';
+import { SettingsContent } from './SettingsContent';
+import { SettingsModal } from './SettingsModal';
 import { SpawnList } from './SpawnList';
 import { StatsPanel } from './StatsPanel';
 
@@ -53,7 +54,7 @@ const STATUS_BADGE: Record<ConnStatus, string> = {
 };
 
 type PanelKey =
-  | 'spawns' | 'stats' | 'buffs' | 'group' | 'chat' | 'combat' | 'filters';
+  | 'spawns' | 'stats' | 'buffs' | 'group' | 'chat' | 'combat';
 const PANEL_DEFS: { key: PanelKey; label: string }[] = [
   { key: 'spawns',  label: 'Spawns'  },
   { key: 'stats',   label: 'Stats'   },
@@ -61,7 +62,6 @@ const PANEL_DEFS: { key: PanelKey; label: string }[] = [
   { key: 'group',   label: 'Group'   },
   { key: 'chat',    label: 'Chat'    },
   { key: 'combat',  label: 'Combat'  },
-  { key: 'filters', label: 'Filters' },
 ];
 const DEFAULT_VISIBILITY: Record<PanelKey, boolean> = {
   spawns:  true,
@@ -70,7 +70,6 @@ const DEFAULT_VISIBILITY: Record<PanelKey, boolean> = {
   group:   true,
   chat:    true,
   combat:  false,
-  filters: false,
 };
 
 function loadVisibility(): Record<PanelKey, boolean> {
@@ -96,6 +95,7 @@ export function App() {
   const [selectVersion, setSelectVersion] = useState(0);
   const [visibility, setVisibility] = useState<Record<PanelKey, boolean>>(() => loadVisibility());
   const [railWidths, setRailWidths] = useState<RailWidths>(() => loadRailWidths());
+  const [settingsOpen, setSettingsOpen] = useState(false);
   // Live SeqClient for panels that need to send mutations back to the
   // daemon (e.g. FilterRulesPanel). Refreshed each time the URL changes.
   const clientRef = useRef<SeqClient | null>(null);
@@ -166,7 +166,7 @@ export function App() {
   const showLeftRail = visibility.spawns;
   const showRightRail =
     visibility.stats || visibility.buffs   || visibility.group ||
-    visibility.chat  || visibility.combat  || visibility.filters;
+    visibility.chat  || visibility.combat;
 
   return (
     <main className="flex h-screen w-screen flex-col bg-bg-base text-neutral-200">
@@ -186,7 +186,17 @@ export function App() {
         <span className={`rounded px-2 py-0.5 text-xs ${STATUS_BADGE[status]}`}>
           {status}
         </span>
-        <div className="ml-auto flex gap-1">
+        <div className="ml-auto flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setSettingsOpen(true)}
+            aria-label="Open settings"
+            title="Settings"
+            className="rounded px-2 py-0.5 text-base leading-none text-neutral-400 hover:bg-bg-base hover:text-neutral-200"
+          >
+            ⚙
+          </button>
+          <span className="mx-1 h-4 w-px bg-neutral-700" aria-hidden />
           {PANEL_DEFS.map((p) => (
             <button
               key={p.key}
@@ -269,26 +279,6 @@ export function App() {
                   <CombatLog store={store} tick={tick} />
                 </Panel>
               )}
-              {visibility.filters && (
-                <Panel
-                  title="Filters"
-                  onClose={() => hidePanel('filters')}
-                  className="min-h-0 flex-1"
-                  bodyClassName="overflow-auto"
-                >
-                  {clientRef.current ? (
-                    <FilterRulesPanel
-                      store={store}
-                      client={clientRef.current}
-                      tick={tick}
-                    />
-                  ) : (
-                    <div className="px-2 py-2 text-xs text-neutral-500">
-                      Connecting…
-                    </div>
-                  )}
-                </Panel>
-              )}
               {visibility.chat && (
                 <Panel
                   title="Chat"
@@ -302,6 +292,17 @@ export function App() {
           </>
         )}
       </div>
+      <SettingsModal
+        open={settingsOpen}
+        title="Settings"
+        onClose={() => setSettingsOpen(false)}
+      >
+        <SettingsContent
+          store={store}
+          client={clientRef.current}
+          tick={tick}
+        />
+      </SettingsModal>
     </main>
   );
 }
