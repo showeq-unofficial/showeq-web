@@ -8,6 +8,7 @@ import type {
   GroupUpdate,
   MapGeometry,
   PlayerStats,
+  Pref,
   Spawn,
 } from '@gen/seq/v1/events_pb';
 
@@ -36,6 +37,10 @@ export class SpawnStore {
   private buffs: BuffsUpdate | undefined;
   private categories: CategoriesUpdate | undefined;
   private filterRules: FilterRulesUpdate | undefined;
+  // Allowlisted daemon-side preferences keyed by `${section}.${key}`.
+  // Populated wholesale by PrefsSnapshot, then mutated incrementally by
+  // PrefChanged.
+  private prefs = new Map<string, Pref>();
   // Bounded ring buffers (oldest first). Growth capped at the *_LIMIT
   // constants above to prevent unbounded memory in long sessions.
   private chat: ChatEntry[] = [];
@@ -104,6 +109,18 @@ export class SpawnStore {
       case 'filterRules':
         this.filterRules = p.value;
         break;
+      case 'prefs':
+        this.prefs.clear();
+        for (const pref of p.value.prefs) {
+          this.prefs.set(`${pref.section}.${pref.key}`, pref);
+        }
+        break;
+      case 'prefChanged':
+        if (p.value.pref) {
+          const pref = p.value.pref;
+          this.prefs.set(`${pref.section}.${pref.key}`, pref);
+        }
+        break;
       case 'combat': {
         this.combat.push({
           ...p.value,
@@ -135,6 +152,10 @@ export class SpawnStore {
   buffsState(): BuffsUpdate | undefined { return this.buffs; }
   categoriesState(): CategoriesUpdate | undefined { return this.categories; }
   filterRulesState(): FilterRulesUpdate | undefined { return this.filterRules; }
+  pref(section: string, key: string): Pref | undefined {
+    return this.prefs.get(`${section}.${key}`);
+  }
+  allPrefs(): ReadonlyMap<string, Pref> { return this.prefs; }
 
   // Quick membership check used by MapCanvas to highlight group members.
   isGroupSpawn(spawnId: number): boolean {

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { SeqClient } from '../net/client';
 import type { SpawnStore } from '../state/store';
 import { FilterRulesPanel } from './FilterRulesPanel';
+import { PreferencesPanel } from './PreferencesPanel';
 
 type Tab = 'filters' | 'preferences';
 
@@ -59,9 +60,7 @@ export function SettingsContent({
           )
         )}
         {active === 'preferences' && (
-          <div className="px-4 py-6 text-xs text-neutral-500">
-            (Coming soon — global preferences will appear here.)
-          </div>
+          <PreferencesPanel store={store} client={client} tick={tick} />
         )}
       </div>
     </div>

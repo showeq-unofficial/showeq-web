@@ -3,11 +3,13 @@ import {
   AddFilterRuleSchema,
   ClientEnvelopeSchema,
   RemoveFilterRuleSchema,
+  SetPrefSchema,
   SubscribeSchema,
   Topic,
 } from '@gen/seq/v1/client_pb';
 import {
   EnvelopeSchema,
+  PrefSchema,
   type Envelope,
 } from '@gen/seq/v1/events_pb';
 
@@ -89,6 +91,35 @@ export class SeqClient {
         case: 'removeFilterRule',
         value: create(RemoveFilterRuleSchema, { filterType, pattern, perZone }),
       },
+    });
+    this.send(env);
+  }
+
+  // Preference mutation. The daemon validates against its allowlist, persists
+  // via XMLPreferences, and broadcasts a PrefChanged envelope to every
+  // connected client (including this one). Caller picks the value variant by
+  // passing exactly one of the four shapes.
+  setPref(
+    section: string,
+    key: string,
+    value:
+      | { stringValue: string }
+      | { intValue: bigint }
+      | { doubleValue: number }
+      | { boolValue: boolean },
+  ): void {
+    let pref;
+    if ('stringValue' in value) {
+      pref = create(PrefSchema, { section, key, value: { case: 'stringValue', value: value.stringValue } });
+    } else if ('intValue' in value) {
+      pref = create(PrefSchema, { section, key, value: { case: 'intValue', value: value.intValue } });
+    } else if ('doubleValue' in value) {
+      pref = create(PrefSchema, { section, key, value: { case: 'doubleValue', value: value.doubleValue } });
+    } else {
+      pref = create(PrefSchema, { section, key, value: { case: 'boolValue', value: value.boolValue } });
+    }
+    const env = create(ClientEnvelopeSchema, {
+      payload: { case: 'setPref', value: create(SetPrefSchema, { pref }) },
     });
     this.send(env);
   }
