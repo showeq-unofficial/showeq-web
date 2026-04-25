@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SeqClient } from '../net/client';
 import { SpawnStore } from '../state/store';
 import { BuffsPanel } from './BuffsPanel';
 import { ChatLog } from './ChatLog';
 import { CombatLog } from './CombatLog';
+import { FilterRulesPanel } from './FilterRulesPanel';
 import { GroupPanel } from './GroupPanel';
 import { MapCanvas } from './MapCanvas';
 import { Panel } from './Panel';
@@ -51,22 +52,25 @@ const STATUS_BADGE: Record<ConnStatus, string> = {
   disconnected: 'bg-red-800 text-red-100',
 };
 
-type PanelKey = 'spawns' | 'stats' | 'buffs' | 'group' | 'chat' | 'combat';
+type PanelKey =
+  | 'spawns' | 'stats' | 'buffs' | 'group' | 'chat' | 'combat' | 'filters';
 const PANEL_DEFS: { key: PanelKey; label: string }[] = [
-  { key: 'spawns', label: 'Spawns' },
-  { key: 'stats',  label: 'Stats'  },
-  { key: 'buffs',  label: 'Buffs'  },
-  { key: 'group',  label: 'Group'  },
-  { key: 'chat',   label: 'Chat'   },
-  { key: 'combat', label: 'Combat' },
+  { key: 'spawns',  label: 'Spawns'  },
+  { key: 'stats',   label: 'Stats'   },
+  { key: 'buffs',   label: 'Buffs'   },
+  { key: 'group',   label: 'Group'   },
+  { key: 'chat',    label: 'Chat'    },
+  { key: 'combat',  label: 'Combat'  },
+  { key: 'filters', label: 'Filters' },
 ];
 const DEFAULT_VISIBILITY: Record<PanelKey, boolean> = {
-  spawns: true,
-  stats:  true,
-  buffs:  false,
-  group:  true,
-  chat:   true,
-  combat: false,
+  spawns:  true,
+  stats:   true,
+  buffs:   false,
+  group:   true,
+  chat:    true,
+  combat:  false,
+  filters: false,
 };
 
 function loadVisibility(): Record<PanelKey, boolean> {
@@ -92,6 +96,9 @@ export function App() {
   const [selectVersion, setSelectVersion] = useState(0);
   const [visibility, setVisibility] = useState<Record<PanelKey, boolean>>(() => loadVisibility());
   const [railWidths, setRailWidths] = useState<RailWidths>(() => loadRailWidths());
+  // Live SeqClient for panels that need to send mutations back to the
+  // daemon (e.g. FilterRulesPanel). Refreshed each time the URL changes.
+  const clientRef = useRef<SeqClient | null>(null);
 
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 250);
@@ -134,6 +141,7 @@ export function App() {
   useEffect(() => {
     setStatus('connecting');
     const client = new SeqClient(url);
+    clientRef.current = client;
     const detachEnv = client.onEnvelope((env) => store.apply(env));
     const ws = { detach: () => { client.close(); detachEnv(); } };
 
@@ -148,13 +156,17 @@ export function App() {
     }, 500);
 
     client.connect();
-    return () => { clearInterval(poll); ws.detach(); };
+    return () => {
+      clearInterval(poll);
+      ws.detach();
+      if (clientRef.current === client) clientRef.current = null;
+    };
   }, [store, url]);
 
   const showLeftRail = visibility.spawns;
   const showRightRail =
-    visibility.stats || visibility.buffs || visibility.group ||
-    visibility.chat  || visibility.combat;
+    visibility.stats || visibility.buffs   || visibility.group ||
+    visibility.chat  || visibility.combat  || visibility.filters;
 
   return (
     <main className="flex h-screen w-screen flex-col bg-bg-base text-neutral-200">
@@ -255,6 +267,26 @@ export function App() {
                   className="min-h-0 flex-1"
                 >
                   <CombatLog store={store} tick={tick} />
+                </Panel>
+              )}
+              {visibility.filters && (
+                <Panel
+                  title="Filters"
+                  onClose={() => hidePanel('filters')}
+                  className="min-h-0 flex-1"
+                  bodyClassName="overflow-auto"
+                >
+                  {clientRef.current ? (
+                    <FilterRulesPanel
+                      store={store}
+                      client={clientRef.current}
+                      tick={tick}
+                    />
+                  ) : (
+                    <div className="px-2 py-2 text-xs text-neutral-500">
+                      Connecting…
+                    </div>
+                  )}
                 </Panel>
               )}
               {visibility.chat && (

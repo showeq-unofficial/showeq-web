@@ -1,6 +1,8 @@
 import { create, fromBinary, toBinary } from '@bufbuild/protobuf';
 import {
+  AddFilterRuleSchema,
   ClientEnvelopeSchema,
+  RemoveFilterRuleSchema,
   SubscribeSchema,
   Topic,
 } from '@gen/seq/v1/client_pb';
@@ -65,6 +67,35 @@ export class SeqClient {
   onEnvelope(fn: EnvelopeListener): () => void {
     this.listeners.add(fn);
     return () => { this.listeners.delete(fn); };
+  }
+
+  // Filter rule mutation: daemon applies via FilterMgr and broadcasts a
+  // refreshed FilterRulesUpdate to all connected clients on success.
+  // Silently no-ops if the socket isn't open — caller can react to the
+  // resulting (or missing) FilterRulesUpdate to confirm.
+  addFilterRule(filterType: number, pattern: string, perZone: boolean): void {
+    const env = create(ClientEnvelopeSchema, {
+      payload: {
+        case: 'addFilterRule',
+        value: create(AddFilterRuleSchema, { filterType, pattern, perZone }),
+      },
+    });
+    this.send(env);
+  }
+
+  removeFilterRule(filterType: number, pattern: string, perZone: boolean): void {
+    const env = create(ClientEnvelopeSchema, {
+      payload: {
+        case: 'removeFilterRule',
+        value: create(RemoveFilterRuleSchema, { filterType, pattern, perZone }),
+      },
+    });
+    this.send(env);
+  }
+
+  private send(env: ReturnType<typeof create<typeof ClientEnvelopeSchema>>): void {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    this.ws.send(toBinary(ClientEnvelopeSchema, env));
   }
 
   private scheduleReconnect(): void {

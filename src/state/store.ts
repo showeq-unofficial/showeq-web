@@ -4,6 +4,7 @@ import type {
   ChatMessage,
   CombatEvent,
   Envelope,
+  FilterRulesUpdate,
   GroupUpdate,
   MapGeometry,
   PlayerStats,
@@ -34,6 +35,7 @@ export class SpawnStore {
   private group: GroupUpdate | undefined;
   private buffs: BuffsUpdate | undefined;
   private categories: CategoriesUpdate | undefined;
+  private filterRules: FilterRulesUpdate | undefined;
   // Bounded ring buffers (oldest first). Growth capped at the *_LIMIT
   // constants above to prevent unbounded memory in long sessions.
   private chat: ChatEntry[] = [];
@@ -99,6 +101,9 @@ export class SpawnStore {
       case 'categories':
         this.categories = p.value;
         break;
+      case 'filterRules':
+        this.filterRules = p.value;
+        break;
       case 'combat': {
         this.combat.push({
           ...p.value,
@@ -129,6 +134,7 @@ export class SpawnStore {
   groupState(): GroupUpdate | undefined { return this.group; }
   buffsState(): BuffsUpdate | undefined { return this.buffs; }
   categoriesState(): CategoriesUpdate | undefined { return this.categories; }
+  filterRulesState(): FilterRulesUpdate | undefined { return this.filterRules; }
 
   // Quick membership check used by MapCanvas to highlight group members.
   isGroupSpawn(spawnId: number): boolean {
