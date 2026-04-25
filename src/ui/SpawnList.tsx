@@ -112,6 +112,15 @@ export function SpawnList({
   // is non-empty by default.
   const [categoryFilter, setCategoryFilter] = useState<number>(-1);
   const [hideFiltered, setHideFiltered] = useState(true);
+  // Row tints (Hunt/Caution/Danger/etc. backgrounds) are on by default.
+  // Persisted because the preference is per-user, not per-session.
+  const [rowTints, setRowTints] = useState<boolean>(
+    () => localStorage.getItem('spawnlist.rowTints') !== '0',
+  );
+  const setRowTintsPersisted = (v: boolean) => {
+    setRowTints(v);
+    localStorage.setItem('spawnlist.rowTints', v ? '1' : '0');
+  };
   const FILTERED_BIT = 1 << 5;
   const categoriesState = store.categoriesState();
   const categories = categoriesState?.categories ?? [];
@@ -190,6 +199,15 @@ export function SpawnList({
           />
           Hide Filtered
         </label>
+        <label className="flex cursor-pointer items-center gap-1">
+          <input
+            type="checkbox"
+            checked={rowTints}
+            onChange={(e) => setRowTintsPersisted(e.target.checked)}
+            className="h-3 w-3 accent-blue-500"
+          />
+          Tints
+        </label>
       </div>
       <div className="flex items-center justify-between border-b border-neutral-800 px-2 py-1 text-[11px] text-neutral-400">
         <span>{rows.length} spawn{rows.length === 1 ? '' : 's'}</span>
@@ -222,7 +240,9 @@ export function SpawnList({
           <tbody>
             {table.getRowModel().rows.map((r) => {
               const isSelected = r.original.id === selectedId;
-              const filterTint = tintForFilterFlags(r.original.filterFlags);
+              const filterTint = rowTints
+                ? tintForFilterFlags(r.original.filterFlags)
+                : '';
               return (
                 <tr
                   key={r.id}

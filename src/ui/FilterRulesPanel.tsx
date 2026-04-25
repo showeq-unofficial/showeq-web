@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { SeqClient } from '../net/client';
 import type { SpawnStore } from '../state/store';
-import { FILTERS } from './filterflags';
+import { FILTERS, tintForFilterFlags } from './filterflags';
 
 // Filter rule editor. Lists current rules grouped by FilterMgr type
 // (Hunt / Caution / ...) and provides a single add row per group plus
@@ -89,6 +89,10 @@ function FilterTypeBlock({
   const [draft, setDraft] = useState('');
 
   const visible = rules.filter((r) => r.perZone === perZone);
+  // Show the same tint the spawn list uses for this filter type, so
+  // users can map header → row color at a glance. Empty for
+  // Filtered/Tracer (no tint by design).
+  const tint = tintForFilterFlags(1 << typeId);
 
   const onAdd = () => {
     const trimmed = draft.trim();
@@ -104,7 +108,16 @@ function FilterTypeBlock({
   return (
     <section className="rounded border border-neutral-800 bg-bg-panel/60">
       <header className="flex items-baseline justify-between border-b border-neutral-800 px-2 py-1 text-[11px] uppercase tracking-wide text-neutral-300">
-        <span>{label}</span>
+        <span className="flex items-center gap-1.5">
+          <span
+            aria-hidden
+            className={
+              'inline-block h-2.5 w-2.5 rounded-sm border border-neutral-700 ' +
+              (tint || 'bg-neutral-800')
+            }
+          />
+          {label}
+        </span>
         <span className="text-neutral-500">
           {visible.length} rule{visible.length === 1 ? '' : 's'}
         </span>
