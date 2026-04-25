@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { SpawnStore } from '../state/store';
 import { SpawnType } from '@gen/seq/v1/events_pb';
+import { classNameOf } from './classes';
 import { conHex, conOf } from './concolor';
 
 // Fallback color when con-color isn't applicable: doors/drops have no
@@ -16,19 +17,47 @@ const COLOR_BY_TYPE: Record<number, string> = {
   [SpawnType.DROP]:       '#ffe066',
 };
 
+// Pixel radius for hit-testing on spawn dots — slightly larger than the
+// 3px drawn dot so the click target is forgiving. Mirrors showeq-c's
+// 15px `closestSpawnToPoint` distance for clicks (map.cpp:2051), with a
+// tighter 10px radius for hover so labels don't follow the cursor across
+// dense spawn fields.
+const CLICK_HIT_RADIUS = 12;
+const HOVER_HIT_RADIUS = 10;
+// Movement threshold (canvas px) below which a mouse-up after mouse-down
+// is treated as a click rather than a drag-pan.
+const DRAG_THRESHOLD = 4;
+
+type SpawnHit = { id: number; x: number; y: number };
+
 export function MapCanvas({
   store,
   tick,
   selectedId,
   selectVersion,
+  onSelect,
 }: {
   store: SpawnStore;
   tick: number;
   selectedId: number | null;
   selectVersion: number;
+  onSelect: (id: number | null) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
+  // Latest projected screen positions of spawns + the player, refreshed
+  // every render frame. Read by mouse handlers to do hit-testing without
+  // re-projecting the world.
+  const spawnHitsRef = useRef<SpawnHit[]>([]);
+  // Hover state lives in React because the tooltip is a DOM overlay, not
+  // a canvas draw. Updated on mousemove from the same hits ref.
+  const [hover, setHover] = useState<{
+    id: number;
+    screenX: number;
+    screenY: number;
+  } | null>(null);
+  const onSelectRef = useRef(onSelect);
+  useEffect(() => { onSelectRef.current = onSelect; }, [onSelect]);
 
   // Pan & zoom kept in refs so mouse events don't churn React state. The
   // render loop reads them every frame.
@@ -47,12 +76,21 @@ export function MapCanvas({
   const pendingCenterRef = useRef<number | null>(null);
   const selectedIdRef = useRef<number | null>(null);
   useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
+  // When a selection originates from a click *on the map*, the view is
+  // already showing the spawn — auto-recenter+zoom would just yank it
+  // around. The click handler stamps this with the id it just selected
+  // so the recenter effect below can skip exactly that change.
+  const skipCenterForIdRef = useRef<number | null>(null);
 
   // On any (re-)select, request a center on next frame and bump zoom if
   // we're still zoomed out. Watching selectVersion as well as selectedId
   // means clicking the same row recenters.
   useEffect(() => {
     if (selectedId == null) return;
+    if (skipCenterForIdRef.current === selectedId) {
+      skipCenterForIdRef.current = null;
+      return;
+    }
     pendingCenterRef.current = selectedId;
     if (viewScaleRef.current < 3) viewScaleRef.current = 3;
   }, [selectedId, selectVersion]);
@@ -64,6 +102,17 @@ export function MapCanvas({
   const visibleLayersRef = useRef(visibleLayers);
   useEffect(() => { visibleLayersRef.current = visibleLayers; }, [visibleLayers]);
   const [overlayCollapsed, setOverlayCollapsed] = useState(false);
+  // Grid (mirrors showeq-c's MapData::paintGrid). Resolution in world
+  // units — 500 matches mapcore.cpp:75. Default-on per the user request.
+  const [showGrid, setShowGrid] = useState<boolean>(
+    () => localStorage.getItem('map.showGrid') !== '0',
+  );
+  const showGridRef = useRef(showGrid);
+  useEffect(() => {
+    showGridRef.current = showGrid;
+    localStorage.setItem('map.showGrid', showGrid ? '1' : '0');
+  }, [showGrid]);
+  const GRID_RESOLUTION = 500;
 
   // Detect zone change → reset view + show all layers in the new geometry.
   useEffect(() => {
@@ -104,11 +153,36 @@ export function MapCanvas({
     return () => obs.disconnect();
   }, []);
 
-  // Mouse: drag to pan, wheel to zoom (cursor-anchored).
+  // Mouse: drag to pan, click to select, hover to show name. Wheel zooms
+  // (cursor-anchored).
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    // Track the down-event so we can distinguish click (small movement)
+    // from drag-pan. Pan starts on mousedown but a final movement under
+    // DRAG_THRESHOLD also counts as a click.
     let dragOrigin: { x: number; y: number } | null = null;
+    let downAt: { clientX: number; clientY: number } | null = null;
+    let movedFar = false;
+
+    const findHit = (clientX: number, clientY: number, radius: number) => {
+      const rect = canvas.getBoundingClientRect();
+      const cx = clientX - rect.left;
+      const cy = clientY - rect.top;
+      const r2 = radius * radius;
+      let best: SpawnHit | null = null;
+      let bestD2 = Infinity;
+      for (const h of spawnHitsRef.current) {
+        const dx = h.x - cx;
+        const dy = h.y - cy;
+        const d2 = dx * dx + dy * dy;
+        if (d2 <= r2 && d2 < bestD2) {
+          bestD2 = d2;
+          best = h;
+        }
+      }
+      return best;
+    };
 
     const onMouseDown = (e: MouseEvent) => {
       if (e.button !== 0) return;
@@ -116,13 +190,49 @@ export function MapCanvas({
         x: e.clientX - panXRef.current,
         y: e.clientY - panYRef.current,
       };
+      downAt = { clientX: e.clientX, clientY: e.clientY };
+      movedFar = false;
     };
     const onMouseMove = (e: MouseEvent) => {
-      if (!dragOrigin) return;
-      panXRef.current = e.clientX - dragOrigin.x;
-      panYRef.current = e.clientY - dragOrigin.y;
+      if (dragOrigin && downAt) {
+        const dx = e.clientX - downAt.clientX;
+        const dy = e.clientY - downAt.clientY;
+        if (!movedFar && dx * dx + dy * dy > DRAG_THRESHOLD * DRAG_THRESHOLD) {
+          movedFar = true;
+        }
+        if (movedFar) {
+          panXRef.current = e.clientX - dragOrigin.x;
+          panYRef.current = e.clientY - dragOrigin.y;
+          // Pan invalidates whatever was under the cursor before.
+          setHover((h) => (h ? null : h));
+        }
+        return;
+      }
+      // Hover hit-test (only when not dragging).
+      const hit = findHit(e.clientX, e.clientY, HOVER_HIT_RADIUS);
+      if (!hit) {
+        setHover((h) => (h ? null : h));
+        return;
+      }
+      // Canvas-local coords; wrap div is `relative` so absolute children
+      // position against the same origin.
+      setHover({ id: hit.id, screenX: hit.x, screenY: hit.y });
     };
-    const onMouseUp = () => { dragOrigin = null; };
+    const onMouseUp = (e: MouseEvent) => {
+      const wasClick = dragOrigin != null && !movedFar && e.button === 0;
+      dragOrigin = null;
+      downAt = null;
+      if (!wasClick) return;
+      // Click: select nearest spawn within CLICK_HIT_RADIUS, or clear
+      // selection on empty space (matches the showeq-c behavior of
+      // requiring a hit but pairs well with the SpawnList row toggle).
+      const hit = findHit(e.clientX, e.clientY, CLICK_HIT_RADIUS);
+      if (hit) {
+        skipCenterForIdRef.current = hit.id;
+        onSelectRef.current(hit.id);
+      }
+    };
+    const onMouseLeave = () => setHover(null);
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       const rect = canvas.getBoundingClientRect();
@@ -146,11 +256,13 @@ export function MapCanvas({
     canvas.addEventListener('mousedown', onMouseDown);
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
+    canvas.addEventListener('mouseleave', onMouseLeave);
     canvas.addEventListener('wheel', onWheel, { passive: false });
     return () => {
       canvas.removeEventListener('mousedown', onMouseDown);
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
+      canvas.removeEventListener('mouseleave', onMouseLeave);
       canvas.removeEventListener('wheel', onWheel);
     };
   }, []);
@@ -219,6 +331,48 @@ export function MapCanvas({
         h / 2 - (y - ccy) * scale + panYRef.current,
       ];
 
+      // Grid (underlay). Ports MapData::paintGrid (mapcore.cpp:1666):
+      // vertical+horizontal lines at every gridResolution world units,
+      // tick labels at each intersection. Only iterate the lines whose
+      // screen-space position falls within the canvas to keep large
+      // zones cheap.
+      if (showGridRef.current) {
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = '#194819';
+        ctx.font = '10px system-ui';
+        ctx.fillStyle = '#e1c819';
+        // World-space bounds of the visible viewport. Inverting the
+        // project() transform: world_x = ccx + (w/2 - sx + panX) / scale.
+        const worldLeft   = ccx + (w / 2 - w + panXRef.current) / scale;
+        const worldRight  = ccx + (w / 2 - 0 + panXRef.current) / scale;
+        const worldTop    = ccy + (h / 2 - h + panYRef.current) / scale;
+        const worldBottom = ccy + (h / 2 - 0 + panYRef.current) / scale;
+        // Project flips both axes (see calcXOffsetI mirror), so worldLeft
+        // is actually the larger world-x. Normalize.
+        const wxMin = Math.min(worldLeft, worldRight);
+        const wxMax = Math.max(worldLeft, worldRight);
+        const wyMin = Math.min(worldTop, worldBottom);
+        const wyMax = Math.max(worldTop, worldBottom);
+        const startX = Math.ceil(wxMin / GRID_RESOLUTION) * GRID_RESOLUTION;
+        const startY = Math.ceil(wyMin / GRID_RESOLUTION) * GRID_RESOLUTION;
+        for (let gx = startX; gx <= wxMax; gx += GRID_RESOLUTION) {
+          const [sx] = project(gx, 0);
+          ctx.beginPath();
+          ctx.moveTo(sx, 0);
+          ctx.lineTo(sx, h);
+          ctx.stroke();
+          ctx.fillText(String(gx), sx + 2, h - 2);
+        }
+        for (let gy = startY; gy <= wyMax; gy += GRID_RESOLUTION) {
+          const [, sy] = project(0, gy);
+          ctx.beginPath();
+          ctx.moveTo(0, sy);
+          ctx.lineTo(w, sy);
+          ctx.stroke();
+          ctx.fillText(String(gy), 2, sy - 2);
+        }
+      }
+
       if (geom) {
         ctx.lineWidth = 1;
         for (const line of geom.lines) {
@@ -248,9 +402,14 @@ export function MapCanvas({
       // Spawns.
       const selId = selectedIdRef.current;
       const pLevel = player?.level ?? 0;
+      // Rebuild hit-test list each frame; we add the player below.
+      const hits: SpawnHit[] = [];
+      let selectedScreen: { x: number; y: number } | null = null;
       for (const s of spawns) {
         if (s.id === player?.id) continue;
         const [px, py] = project(s.pos?.x ?? 0, s.pos?.y ?? 0);
+        hits.push({ id: s.id, x: px, y: py });
+        if (s.id === selId) selectedScreen = { x: px, y: py };
         // Group-member ring (under selection ring so selection wins).
         if (store.isGroupSpawn(s.id)) {
           ctx.strokeStyle = '#38bdf8';
@@ -281,6 +440,19 @@ export function MapCanvas({
       if (player?.pos) {
         const [px, py] = project(player.pos.x, player.pos.y);
         const scaledFov = fovDistanceRef.current * scale;
+        if (player.id) hits.push({ id: player.id, x: px, y: py });
+
+        // Magenta line from player to selected spawn — ports
+        // tIconTypeItemSelected's setLine0(true, Qt::magenta) +
+        // MapIcons::paintIcon (showeq-c/src/mapicon.cpp:689,941-947).
+        if (selectedScreen && selId !== player.id) {
+          ctx.strokeStyle = '#ff00ff';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(px, py);
+          ctx.lineTo(selectedScreen.x, selectedScreen.y);
+          ctx.stroke();
+        }
 
         // FOV background ellipse (semi-transparent fill, drawn under the
         // marker for context).
@@ -362,6 +534,10 @@ export function MapCanvas({
       ctx.fillText(`seq: ${store.seq()}`, 8, 48);
       ctx.fillText(`zoom: ${viewScaleRef.current.toFixed(2)}x`, 8, 64);
 
+      // Publish hits for hit-testing in mouse handlers. Done last so any
+      // dot painted this frame is selectable on the next event.
+      spawnHitsRef.current = hits;
+
       frame = requestAnimationFrame(render);
     };
     render();
@@ -404,6 +580,7 @@ export function MapCanvas({
         ref={canvasRef}
         className="block cursor-grab active:cursor-grabbing"
       />
+      <HoverTip store={store} hover={hover} />
       <div
         className={
           'absolute right-2 top-2 rounded border border-neutral-800 bg-bg-panel/95 text-xs shadow-md backdrop-blur ' +
@@ -454,6 +631,15 @@ export function MapCanvas({
           />
           <span className="w-8 shrink-0 text-right tabular-nums">{fovDistance}</span>
         </label>
+        <label className="mb-2 flex cursor-pointer items-center gap-1 text-[11px] text-neutral-300">
+          <input
+            type="checkbox"
+            checked={showGrid}
+            onChange={(e) => setShowGrid(e.target.checked)}
+            className="h-3 w-3 accent-blue-500"
+          />
+          Grid
+        </label>
         {availableLayers.length === 0 ? (
           <div className="text-neutral-500">no map loaded</div>
         ) : (
@@ -494,6 +680,44 @@ export function MapCanvas({
         )}
         </>
         )}
+      </div>
+    </div>
+  );
+}
+
+// Hover tooltip — mirrors the shape of showeq-c's MapTip popup
+// (map.cpp:4438-4523) but trimmed to the fields the daemon ships:
+// no race string, no guild tag. Positioned at the cursor with a small
+// down-right offset to match the showeq-c +15px nudge.
+function HoverTip({
+  store,
+  hover,
+}: {
+  store: SpawnStore;
+  hover: { id: number; screenX: number; screenY: number } | null;
+}) {
+  if (!hover) return null;
+  const spawn = store.all().find((s) => s.id === hover.id);
+  if (!spawn) return null;
+  const baseName = spawn.name || '(unnamed)';
+  const display = spawn.lastName ? `${baseName} (${spawn.lastName})` : baseName;
+  const hpPct =
+    spawn.hpMax > 0 ? Math.round((spawn.hpCur / spawn.hpMax) * 100) : null;
+  const cls = classNameOf(spawn.class);
+  return (
+    <div
+      style={{ left: hover.screenX + 12, top: hover.screenY + 12 }}
+      className="pointer-events-none absolute z-10 max-w-[220px] rounded border border-neutral-700 bg-bg-panel/95 px-2 py-1 text-[11px] text-neutral-200 shadow-md backdrop-blur"
+    >
+      <div className="truncate font-medium">{display}</div>
+      <div className="text-neutral-400">
+        L{spawn.level || '?'}
+        {hpPct != null ? ` · ${hpPct}% HP` : ''}
+        {cls ? ` · ${cls}` : ''}
+      </div>
+      <div className="tabular-nums text-neutral-500">
+        {Math.round(spawn.pos?.x ?? 0)}, {Math.round(spawn.pos?.y ?? 0)},{' '}
+        {Math.round(spawn.pos?.z ?? 0)}
       </div>
     </div>
   );

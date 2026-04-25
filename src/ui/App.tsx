@@ -267,6 +267,7 @@ export function App() {
             tick={tick}
             selectedId={selectedId}
             selectVersion={selectVersion}
+            onSelect={onSelect}
           />
         </div>
         {showRightRail && (
