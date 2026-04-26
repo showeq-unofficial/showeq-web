@@ -12,7 +12,9 @@ import { ResizeHandle } from './ResizeHandle';
 import { SettingsContent } from './SettingsContent';
 import { SettingsModal } from './SettingsModal';
 import { SpawnList } from './SpawnList';
+import { SpawnPointList } from './SpawnPointList';
 import { StatsPanel } from './StatsPanel';
+import { VerticalResizeHandle } from './VerticalResizeHandle';
 
 type ConnStatus = 'disconnected' | 'connecting' | 'open';
 
@@ -20,6 +22,14 @@ const DEFAULT_URL = `ws://${window.location.hostname || 'localhost'}:9090`;
 const URL_STORAGE_KEY = 'showeq.daemonUrl';
 const PANEL_STORAGE_KEY = 'showeq.panels';
 const RAIL_WIDTH_STORAGE_KEY = 'showeq.railWidths';
+// Fraction (0..1) of the left rail's height given to the Spawns panel
+// when both Spawns and SpawnPoints are visible. The remainder goes to
+// the SpawnPoints panel below it. Persisted so the user's split
+// survives a reload.
+const LEFT_SPLIT_STORAGE_KEY = 'showeq.leftSplit';
+const DEFAULT_LEFT_SPLIT = 0.55;
+const LEFT_SPLIT_MIN = 0.15;
+const LEFT_SPLIT_MAX = 0.85;
 
 // Pixel constraints on rail widths. Center map gets the rest, with its
 // own min-w-[300px] so rails can't crush it down to a sliver.
@@ -48,6 +58,10 @@ function clampRail(w: number): number {
   return Math.max(RAIL_MIN, Math.min(RAIL_MAX, w));
 }
 
+function clampSplit(s: number): number {
+  return Math.max(LEFT_SPLIT_MIN, Math.min(LEFT_SPLIT_MAX, s));
+}
+
 const STATUS_BADGE: Record<ConnStatus, string> = {
   open:         'bg-emerald-700 text-emerald-100',
   connecting:   'bg-amber-700 text-amber-100',
@@ -55,22 +69,24 @@ const STATUS_BADGE: Record<ConnStatus, string> = {
 };
 
 type PanelKey =
-  | 'spawns' | 'stats' | 'buffs' | 'group' | 'chat' | 'combat';
+  | 'spawns' | 'spawnPoints' | 'stats' | 'buffs' | 'group' | 'chat' | 'combat';
 const PANEL_DEFS: { key: PanelKey; label: string }[] = [
-  { key: 'spawns',  label: 'Spawns'  },
-  { key: 'stats',   label: 'Stats'   },
-  { key: 'buffs',   label: 'Buffs'   },
-  { key: 'group',   label: 'Group'   },
-  { key: 'chat',    label: 'Chat'    },
-  { key: 'combat',  label: 'Combat'  },
+  { key: 'spawns',      label: 'Spawns'  },
+  { key: 'spawnPoints', label: 'Points'  },
+  { key: 'stats',       label: 'Stats'   },
+  { key: 'buffs',       label: 'Buffs'   },
+  { key: 'group',       label: 'Group'   },
+  { key: 'chat',        label: 'Chat'    },
+  { key: 'combat',      label: 'Combat'  },
 ];
 const DEFAULT_VISIBILITY: Record<PanelKey, boolean> = {
-  spawns:  true,
-  stats:   true,
-  buffs:   false,
-  group:   true,
-  chat:    true,
-  combat:  false,
+  spawns:      true,
+  spawnPoints: true,
+  stats:       true,
+  buffs:       false,
+  group:       true,
+  chat:        true,
+  combat:      false,
 };
 
 function loadVisibility(): Record<PanelKey, boolean> {
@@ -96,6 +112,12 @@ export function App() {
   const [selectVersion, setSelectVersion] = useState(0);
   const [visibility, setVisibility] = useState<Record<PanelKey, boolean>>(() => loadVisibility());
   const [railWidths, setRailWidths] = useState<RailWidths>(() => loadRailWidths());
+  const [leftSplit, setLeftSplit] = useState<number>(() => {
+    const raw = localStorage.getItem(LEFT_SPLIT_STORAGE_KEY);
+    const parsed = raw ? Number(raw) : DEFAULT_LEFT_SPLIT;
+    return Number.isFinite(parsed) ? clampSplit(parsed) : DEFAULT_LEFT_SPLIT;
+  });
+  const leftRailRef = useRef<HTMLDivElement | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   // Live SeqClient for panels that need to send mutations back to the
   // daemon (e.g. FilterRulesPanel). Refreshed each time the URL changes.
@@ -114,12 +136,25 @@ export function App() {
     localStorage.setItem(RAIL_WIDTH_STORAGE_KEY, JSON.stringify(railWidths));
   }, [railWidths]);
 
+  useEffect(() => {
+    localStorage.setItem(LEFT_SPLIT_STORAGE_KEY, leftSplit.toString());
+  }, [leftSplit]);
+
   const onLeftResize = useCallback((dx: number) => {
     setRailWidths((w) => ({ ...w, left: clampRail(w.left + dx) }));
   }, []);
   const onRightResize = useCallback((dx: number) => {
     // Right rail grows when you drag the handle leftward.
     setRailWidths((w) => ({ ...w, right: clampRail(w.right - dx) }));
+  }, []);
+  // Convert pixel-space drag delta into a fraction of the rail's
+  // current height. Reading from the DOM avoids tracking a separate
+  // resize observer for the rail container — its height is always
+  // the parent flex row's full height minus the header.
+  const onLeftSplitResize = useCallback((dy: number) => {
+    const h = leftRailRef.current?.clientHeight ?? 0;
+    if (h <= 0) return;
+    setLeftSplit((s) => clampSplit(s + dy / h));
   }, []);
 
   const togglePanel = (key: PanelKey) =>
@@ -184,10 +219,11 @@ export function App() {
     };
   }, [store, url]);
 
-  const showLeftRail = visibility.spawns;
+  const showLeftRail = visibility.spawns || visibility.spawnPoints;
   const showRightRail =
     visibility.stats || visibility.buffs   || visibility.group ||
     visibility.chat  || visibility.combat;
+  const bothLeftPanels = visibility.spawns && visibility.spawnPoints;
 
   return (
     <main className="flex h-screen w-screen flex-col bg-bg-base text-neutral-200">
@@ -240,6 +276,7 @@ export function App() {
         {showLeftRail && (
           <>
             <div
+              ref={leftRailRef}
               className="flex shrink-0 flex-col"
               style={{ width: `${railWidths.left}px` }}
             >
@@ -247,7 +284,12 @@ export function App() {
                 <Panel
                   title="Spawns"
                   onClose={() => hidePanel('spawns')}
-                  className="min-h-0 flex-1"
+                  className="min-h-0"
+                  style={
+                    bothLeftPanels
+                      ? { flex: `${leftSplit} 1 0%` }
+                      : { flex: '1 1 0%' }
+                  }
                 >
                   <SpawnList
                     store={store}
@@ -255,6 +297,23 @@ export function App() {
                     selectedId={selectedId}
                     onSelect={onSelect}
                   />
+                </Panel>
+              )}
+              {bothLeftPanels && (
+                <VerticalResizeHandle onDrag={onLeftSplitResize} />
+              )}
+              {visibility.spawnPoints && (
+                <Panel
+                  title="Spawn Points"
+                  onClose={() => hidePanel('spawnPoints')}
+                  className="min-h-0"
+                  style={
+                    bothLeftPanels
+                      ? { flex: `${1 - leftSplit} 1 0%` }
+                      : { flex: '1 1 0%' }
+                  }
+                >
+                  <SpawnPointList store={store} tick={tick} />
                 </Panel>
               )}
             </div>

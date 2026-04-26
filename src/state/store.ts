@@ -10,6 +10,7 @@ import type {
   PlayerStats,
   Pref,
   Spawn,
+  SpawnPoint,
 } from '@gen/seq/v1/events_pb';
 
 // One chat-log line: the wire ChatMessage plus the seq the daemon used,
@@ -28,6 +29,9 @@ const COMBAT_HISTORY_LIMIT = 500;
 // this in place; MapCanvas re-reads on each animation frame.
 export class SpawnStore {
   private readonly spawns = new Map<number, Spawn>();
+  // SpawnMonitor's promoted points keyed by SpawnPoint.key. Cleared
+  // wholesale on zoneChanged / SpawnPointsCleared.
+  private readonly spawnPoints = new Map<string, SpawnPoint>();
   private zoneShort = '';
   private zoneLong = '';
   private playerId = 0;
@@ -53,11 +57,13 @@ export class SpawnStore {
     switch (p.case) {
       case 'snapshot': {
         this.spawns.clear();
+        this.spawnPoints.clear();
         this.zoneShort = p.value.zoneShort;
         this.zoneLong = p.value.zoneLong;
         this.playerId = p.value.playerId;
         this.geometry = p.value.geometry;
         for (const s of p.value.spawns) this.spawns.set(s.id, s);
+        for (const sp of p.value.spawnPoints) this.spawnPoints.set(sp.key, sp);
         break;
       }
       case 'zoneChanged':
@@ -65,6 +71,19 @@ export class SpawnStore {
         this.zoneLong = p.value.zoneLong;
         this.geometry = p.value.geometry;
         this.spawns.clear();
+        this.spawnPoints.clear();
+        break;
+      case 'spawnPointAdded':
+      case 'spawnPointUpdated': {
+        const point = p.value.point;
+        if (point) this.spawnPoints.set(point.key, point);
+        break;
+      }
+      case 'spawnPointRemoved':
+        this.spawnPoints.delete(p.value.key);
+        break;
+      case 'spawnPointsCleared':
+        this.spawnPoints.clear();
         break;
       case 'spawnAdded':
         if (p.value.spawn) this.spawns.set(p.value.spawn.id, p.value.spawn);
@@ -138,6 +157,7 @@ export class SpawnStore {
   }
 
   all(): Spawn[] { return Array.from(this.spawns.values()); }
+  allSpawnPoints(): SpawnPoint[] { return Array.from(this.spawnPoints.values()); }
   zone(): string { return this.zoneShort; }
   zoneLongName(): string { return this.zoneLong; }
   seq(): bigint { return this.lastSeq; }

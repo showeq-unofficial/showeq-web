@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 
 // Standard chrome around a side-rail panel: a header strip with the
 // title + close (hide) button, and the body. Body grows to fill the
@@ -9,15 +9,17 @@ export function Panel({
   children,
   className = '',
   bodyClassName = '',
+  style,
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
   className?: string;
   bodyClassName?: string;
+  style?: CSSProperties;
 }) {
   return (
-    <section className={`flex min-h-0 flex-col border-b border-neutral-800 bg-bg-panel ${className}`}>
+    <section style={style} className={`flex min-h-0 flex-col border-b border-neutral-800 bg-bg-panel ${className}`}>
       <header className="flex shrink-0 items-center justify-between border-b border-neutral-800 bg-bg-alt px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-neutral-300">
         <span>{title}</span>
         <button
