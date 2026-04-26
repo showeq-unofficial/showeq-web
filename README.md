@@ -13,9 +13,19 @@ renders spawns, zones, and player state in the browser.
 
 ## Quick start
 
+`bun run gen` runs `buf generate ../showeq-proto`, so the
+[`showeq-proto`](https://github.com/showeq-unofficial/showeq-proto)
+repo must be checked out as a sibling directory before generating —
+the same parent dir holds both repos:
+
 ```sh
+# Once, in the directory you want both repos under:
+git clone git@github.com:showeq-unofficial/showeq-proto.git
+git clone git@github.com:showeq-unofficial/showeq-web.git
+
+cd showeq-web
 bun install
-bun run gen           # generate TypeScript from showeq-proto
+bun run gen           # generates src/gen/ from ../showeq-proto
 bun run dev           # starts dev server on :5173
 ```
 
