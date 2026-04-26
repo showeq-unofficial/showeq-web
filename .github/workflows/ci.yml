@@ -17,24 +17,20 @@ jobs:
           repository: ${{ github.repository_owner }}/showeq-proto
           path: ../showeq-proto
 
-      - uses: pnpm/action-setup@v4
+      - uses: oven-sh/setup-bun@v2
         with:
-          version: 9
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
+          bun-version: latest
 
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm run gen
-      - run: pnpm run typecheck
-      - run: pnpm run test
-      - run: pnpm run build
+      - run: bun install --frozen-lockfile
+      - run: bun run gen
+      - run: bun run typecheck
+      - run: bun run test
+      - run: bun run build
 
       - name: playwright deps
-        run: pnpm exec playwright install --with-deps chromium
+        run: bunx playwright install --with-deps chromium
 
       - name: e2e
-        run: pnpm run test:e2e
+        run: bun run test:e2e
         # Playwright specs don't exist yet; CI will short-circuit cleanly.
         if: hashFiles('tests/**/*.spec.ts') != ''

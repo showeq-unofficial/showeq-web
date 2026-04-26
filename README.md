@@ -14,9 +14,9 @@ renders spawns, zones, and player state in the browser.
 ## Quick start
 
 ```sh
-pnpm install
-pnpm run gen          # generate TypeScript from showeq-proto
-pnpm run dev          # starts dev server on :5173
+bun install
+bun run gen           # generate TypeScript from showeq-proto
+bun run dev           # starts dev server on :5173
 ```
 
 Open http://localhost:5173 with a running `showeq-daemon` on
