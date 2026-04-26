@@ -4,8 +4,8 @@
  * comes back. Prints the snapshot contents and exits 0 on success.
  *
  * Usage:
- *   pnpm run smoke          # wraps `tsx scripts/smoke-test.ts`
- *   SEQ_URL=ws://host:port pnpm run smoke
+ *   bun run smoke           # wraps `bun scripts/smoke-test.ts`
+ *   SEQ_URL=ws://host:port bun run smoke
  *
  * This is a developer convenience, not part of the CI flow yet.
  */

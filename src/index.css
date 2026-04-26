@@ -1,6 +1,10 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@theme {
+  --color-bg-base: #0a0e12;
+  --color-bg-panel: #111820;
+  --color-bg-alt: #182230;
+}
 
 html, body, #root {
   height: 100%;
