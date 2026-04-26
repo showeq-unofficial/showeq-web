@@ -3,6 +3,7 @@ import {
   AddFilterRuleSchema,
   ClientEnvelopeSchema,
   EditFilterRuleSchema,
+  ListDevicesSchema,
   ReloadFiltersSchema,
   RemoveFilterRuleSchema,
   SaveFiltersSchema,
@@ -204,6 +205,21 @@ export class SeqClient {
     }
     const env = create(ClientEnvelopeSchema, {
       payload: { case: 'setPref', value: create(SetPrefSchema, { pref }) },
+    });
+    this.send(env);
+  }
+
+  // Ask the daemon for the current pcap_findalldevs() interface list.
+  // The daemon replies on this connection only (not broadcast) with a
+  // DevicesList envelope. Callers wire onEnvelope to pick that up —
+  // there's no Promise wrapper because the answer also has to thread
+  // through reconnect/replay handling.
+  listDevices(): void {
+    const env = create(ClientEnvelopeSchema, {
+      payload: {
+        case: 'listDevices',
+        value: create(ListDevicesSchema, {}),
+      },
     });
     this.send(env);
   }
