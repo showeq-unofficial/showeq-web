@@ -8,14 +8,19 @@ on:
 jobs:
   web:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: showeq-web
     steps:
       - uses: actions/checkout@v5
+        with:
+          path: showeq-web
 
       - name: checkout proto alongside
         uses: actions/checkout@v5
         with:
           repository: ${{ github.repository_owner }}/showeq-proto
-          path: ../showeq-proto
+          path: showeq-proto
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -33,4 +38,4 @@ jobs:
       - name: e2e
         run: bun run test:e2e
         # Playwright specs don't exist yet; CI will short-circuit cleanly.
-        if: hashFiles('tests/**/*.spec.ts') != ''
+        if: hashFiles('showeq-web/tests/**/*.spec.ts') != ''
