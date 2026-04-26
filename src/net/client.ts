@@ -38,7 +38,18 @@ export class SeqClient {
 
   connect(): void {
     if (this.closed) return;
-    const ws = new WebSocket(this.url);
+    let ws: WebSocket;
+    try {
+      // Constructor throws synchronously on a malformed URL or on
+      // mixed-content (e.g. ws:// from an https page). Catch so the
+      // React tree doesn't unmount; reconnect will keep retrying and
+      // pick up a new URL once the user fixes it in Settings.
+      ws = new WebSocket(this.url);
+    } catch (err) {
+      console.warn('WebSocket construction failed', err);
+      this.scheduleReconnect();
+      return;
+    }
     ws.binaryType = 'arraybuffer';
     this.ws = ws;
 
