@@ -19,11 +19,20 @@ export type EnvelopeListener = (env: Envelope) => void;
 // Subscribe on open, and fans out incoming Envelope messages to listeners.
 // Reconnects with exponential backoff on disconnect — the daemon may be
 // restarted during capture sessions.
+//
+// Resume: the daemon assigns a session_id on first Subscribe and includes
+// it in the Snapshot envelope. We hold it (and the high-water-mark seq)
+// in memory; if the WebSocket drops we reconnect with both fields set so
+// the daemon replays anything it buffered while we were gone instead of
+// rebuilding from a fresh Snapshot. Both reset on `close()` / page reload
+// — fresh page = fresh session.
 export class SeqClient {
   private ws?: WebSocket;
   private listeners = new Set<EnvelopeListener>();
   private backoffMs = 250;
   private closed = false;
+  private sessionId = '';
+  private lastSeq = 0n;
 
   constructor(private readonly url: string) {}
 
@@ -40,6 +49,8 @@ export class SeqClient {
           case: 'subscribe',
           value: create(SubscribeSchema, {
             topics: [Topic.SPAWNS, Topic.ZONE, Topic.PLAYER],
+            sessionId: this.sessionId,
+            lastSeq: this.lastSeq,
           }),
         },
       });
@@ -51,6 +62,13 @@ export class SeqClient {
       const bytes = new Uint8Array(ev.data);
       try {
         const env = fromBinary(EnvelopeSchema, bytes);
+        // Track the high-water-mark seq so reconnect can resume from
+        // the right point. Snapshots also carry the daemon-assigned
+        // session_id; latch it so subsequent Subscribes echo it back.
+        if (env.seq > this.lastSeq) this.lastSeq = env.seq;
+        if (env.payload.case === 'snapshot' && env.payload.value.sessionId) {
+          this.sessionId = env.payload.value.sessionId;
+        }
         for (const l of this.listeners) l(env);
       } catch (err) {
         console.warn('failed to decode Envelope', err);
