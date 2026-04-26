@@ -29,13 +29,13 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run gen
       - run: bun run typecheck
-      - run: bun run test
+      # - run: bun run test
       - run: bun run build
 
-      - name: playwright deps
-        run: bunx playwright install --with-deps chromium
-
-      - name: e2e
-        run: bun run test:e2e
-        # Playwright specs don't exist yet; CI will short-circuit cleanly.
-        if: hashFiles('showeq-web/tests/**/*.spec.ts') != ''
+      # No vitest/playwright suites yet — re-enable when tests land.
+      # - name: playwright deps
+      #   run: bunx playwright install --with-deps chromium
+      #
+      # - name: e2e
+      #   run: bun run test:e2e
+      #   if: hashFiles('showeq-web/tests/**/*.spec.ts') != ''
