@@ -19,8 +19,9 @@ import { VerticalResizeHandle } from './VerticalResizeHandle';
 type ConnStatus = 'disconnected' | 'connecting' | 'open';
 
 // Match the page's scheme so an https-hosted UI doesn't trip mixed-content.
+// Daemon is expected to run on the user's own machine, not the page origin.
 const DEFAULT_WS_SCHEME = window.location.protocol === 'https:' ? 'wss' : 'ws';
-const DEFAULT_URL = `${DEFAULT_WS_SCHEME}://${window.location.hostname || 'localhost'}:9090`;
+const DEFAULT_URL = `${DEFAULT_WS_SCHEME}://localhost:9090`;
 const URL_STORAGE_KEY = 'showeq.daemonUrl';
 const PANEL_STORAGE_KEY = 'showeq.panels';
 const RAIL_WIDTH_STORAGE_KEY = 'showeq.railWidths';
