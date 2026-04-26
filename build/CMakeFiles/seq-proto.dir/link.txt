@@ -1,2 +1,0 @@
-/usr/bin/ar qc libseq-proto.a "CMakeFiles/seq-proto.dir/gen-proto/seq/v1/events.pb.cc.o" "CMakeFiles/seq-proto.dir/gen-proto/seq/v1/client.pb.cc.o"
-/usr/bin/ranlib libseq-proto.a
