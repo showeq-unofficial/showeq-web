@@ -17,7 +17,8 @@
     "noFallthroughCasesInSwitch": true,
     "baseUrl": ".",
     "paths": {
-      "@gen/*": ["src/gen/*"]
+      "@gen/*": ["src/gen/*"],
+      "@/*": ["src/*"]
     }
   },
   "include": ["src"]

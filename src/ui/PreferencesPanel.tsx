@@ -5,7 +5,6 @@ import {
   type NetworkDevice,
 } from '@gen/seq/v1/events_pb';
 import type { SeqClient } from '../net/client';
-import { localPrefs } from '../state/localPrefs';
 import type { SpawnStore } from '../state/store';
 
 // Preferences tab body. Daemon-side prefs flow through PrefsBroker:
@@ -39,19 +38,6 @@ export function PreferencesPanel({
   const commit = () => {
     if (!client || !dirty) return;
     client.setPref('Interface', 'DateTimeFormat', { stringValue: dtfDraft });
-  };
-
-  // Misc/FastMachine — toggling commits immediately. Daemon mirrors
-  // into showeq_params->fast_machine on apply, so the next distance
-  // calc uses the new value without restart.
-  const fastMachinePref = store.pref('Misc', 'FastMachine');
-  const fastMachine =
-    fastMachinePref?.value.case === 'boolValue'
-      ? fastMachinePref.value.value
-      : true;
-  const toggleFastMachine = (v: boolean) => {
-    if (!client) return;
-    client.setPref('Misc', 'FastMachine', { boolValue: v });
   };
 
   // Network/Device — combobox populated by a ListDevices RPC. Daemon
@@ -96,22 +82,6 @@ export function PreferencesPanel({
   const commitIp = () => {
     if (!client || !ipDirty) return;
     client.setPref('Network', 'IP', { stringValue: ipDraft });
-  };
-
-  const [selectOnCon, setSelectOnCon] = useState(() => localPrefs.selectOnConsider());
-  const [selectOnTarget, setSelectOnTarget] = useState(() => localPrefs.selectOnTarget());
-  const [deselectOnUntarget, setDeselectOnUntarget] = useState(() => localPrefs.deselectOnUntarget());
-  const updateSelectOnCon = (v: boolean) => {
-    setSelectOnCon(v);
-    localPrefs.setSelectOnConsider(v);
-  };
-  const updateSelectOnTarget = (v: boolean) => {
-    setSelectOnTarget(v);
-    localPrefs.setSelectOnTarget(v);
-  };
-  const updateDeselectOnUntarget = (v: boolean) => {
-    setDeselectOnUntarget(v);
-    localPrefs.setDeselectOnUntarget(v);
   };
 
   // Show the saved device even when it isn't (yet) in the enumerated
@@ -194,62 +164,6 @@ export function PreferencesPanel({
           fresh login handshake to decode a new session. Use{' '}
           <code className="text-neutral-400">127.0.0.0</code> (or empty)
           to auto-detect the next EQ client seen on the wire.
-        </p>
-      </section>
-      <section className="flex flex-col gap-2">
-        <label className="text-[11px] uppercase tracking-wide text-neutral-400">
-          Calculations
-        </label>
-        <label className="flex cursor-pointer items-center gap-2">
-          <input
-            type="checkbox"
-            checked={fastMachine}
-            onChange={(e) => toggleFastMachine(e.target.checked)}
-            disabled={!client}
-            className="h-3 w-3 accent-blue-500"
-          />
-          <span>Fast machine (3D float distances)</span>
-        </label>
-        <p className="text-neutral-500">
-          When enabled, distance-to-player is computed in 3D
-          floating-point. Off uses the legacy 2D integer approximation.
-          Takes effect on the next spawn / position update — no restart.
-        </p>
-      </section>
-      <section className="flex flex-col gap-2">
-        <label className="text-[11px] uppercase tracking-wide text-neutral-400">
-          Selection
-        </label>
-        <label className="flex cursor-pointer items-center gap-2">
-          <input
-            type="checkbox"
-            checked={selectOnCon}
-            onChange={(e) => updateSelectOnCon(e.target.checked)}
-            className="h-3 w-3 accent-blue-500"
-          />
-          <span>Select spawn on consider</span>
-        </label>
-        <label className="flex cursor-pointer items-center gap-2">
-          <input
-            type="checkbox"
-            checked={selectOnTarget}
-            onChange={(e) => updateSelectOnTarget(e.target.checked)}
-            className="h-3 w-3 accent-blue-500"
-          />
-          <span>Select spawn on target</span>
-        </label>
-        <label className="flex cursor-pointer items-center gap-2">
-          <input
-            type="checkbox"
-            checked={deselectOnUntarget}
-            onChange={(e) => updateDeselectOnUntarget(e.target.checked)}
-            className="h-3 w-3 accent-blue-500"
-          />
-          <span>Deselect spawn on untarget</span>
-        </label>
-        <p className="text-neutral-500">
-          When enabled, /consider or targeting a spawn in-game updates the
-          highlighted spawn here. Stored per browser.
         </p>
       </section>
       <section className="flex flex-col gap-1">

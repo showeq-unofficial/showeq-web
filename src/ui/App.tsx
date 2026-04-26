@@ -1,15 +1,25 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Menubar,
+  MenubarCheckboxItem,
+  MenubarContent,
+  MenubarLabel,
+  MenubarMenu,
+  MenubarSeparator,
+  MenubarTrigger,
+} from '@/components/ui/menubar';
 import { SeqClient } from '../net/client';
 import { localPrefs } from '../state/localPrefs';
 import { SpawnStore } from '../state/store';
 import { BuffsPanel } from './BuffsPanel';
 import { ChatLog } from './ChatLog';
 import { CombatLog } from './CombatLog';
+import { FilterRulesPanel } from './FilterRulesPanel';
 import { GroupPanel } from './GroupPanel';
 import { MapCanvas } from './MapCanvas';
 import { Panel } from './Panel';
+import { PreferencesPanel } from './PreferencesPanel';
 import { ResizeHandle } from './ResizeHandle';
-import { SettingsContent } from './SettingsContent';
 import { SettingsModal } from './SettingsModal';
 import { SpawnList } from './SpawnList';
 import { SpawnPointList } from './SpawnPointList';
@@ -122,9 +132,34 @@ export function App() {
   });
   const leftRailRef = useRef<HTMLDivElement | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [selectOnCon, setSelectOnCon] = useState(() => localPrefs.selectOnConsider());
+  const [selectOnTarget, setSelectOnTarget] = useState(() => localPrefs.selectOnTarget());
+  const [deselectOnUntarget, setDeselectOnUntarget] = useState(() => localPrefs.deselectOnUntarget());
   // Live SeqClient for panels that need to send mutations back to the
   // daemon (e.g. FilterRulesPanel). Refreshed each time the URL changes.
   const clientRef = useRef<SeqClient | null>(null);
+
+  const fastMachinePref = store.pref('Misc', 'FastMachine');
+  const fastMachine =
+    fastMachinePref?.value.case === 'boolValue'
+      ? fastMachinePref.value.value
+      : true;
+  const toggleFastMachine = (v: boolean) => {
+    clientRef.current?.setPref('Misc', 'FastMachine', { boolValue: v });
+  };
+  const updateSelectOnCon = (v: boolean) => {
+    setSelectOnCon(v);
+    localPrefs.setSelectOnConsider(v);
+  };
+  const updateSelectOnTarget = (v: boolean) => {
+    setSelectOnTarget(v);
+    localPrefs.setSelectOnTarget(v);
+  };
+  const updateDeselectOnUntarget = (v: boolean) => {
+    setDeselectOnUntarget(v);
+    localPrefs.setDeselectOnUntarget(v);
+  };
 
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 250);
@@ -246,7 +281,80 @@ export function App() {
         <span className={`rounded px-2 py-0.5 text-xs ${STATUS_BADGE[status]}`}>
           {status}
         </span>
-        <div className="ml-auto flex items-center gap-1">
+        <div className="ml-auto flex items-center gap-2">
+          <Menubar className="h-6">
+            <button
+              type="button"
+              onClick={() => setFiltersOpen(true)}
+              className="flex items-center bg-primary px-2 text-xs font-medium text-primary-foreground select-none hover:bg-blue-600 focus:bg-primary focus:text-primary-foreground focus:outline-none"
+            >
+              Filters
+            </button>
+            <MenubarSeparator className="mx-0 my-0 h-auto w-px self-stretch" />
+            <MenubarMenu>
+              <MenubarTrigger
+                className="bg-primary text-primary-foreground text-xs hover:bg-blue-600 focus:bg-primary focus:text-primary-foreground data-[state=open]:bg-blue-600 data-[state=open]:text-primary-foreground"
+              >
+                View
+              </MenubarTrigger>
+              <MenubarContent>
+                {PANEL_DEFS.map((p) => (
+                  <MenubarCheckboxItem
+                    key={p.key}
+                    checked={visibility[p.key]}
+                    onCheckedChange={() => togglePanel(p.key)}
+                    onSelect={(e) => e.preventDefault()}
+                  >
+                    {p.label}
+                  </MenubarCheckboxItem>
+                ))}
+              </MenubarContent>
+            </MenubarMenu>
+            <MenubarSeparator className="mx-0 my-0 h-auto w-px self-stretch" />
+            <MenubarMenu>
+              <MenubarTrigger
+                className="bg-primary text-primary-foreground text-xs hover:bg-blue-600 focus:bg-primary focus:text-primary-foreground data-[state=open]:bg-blue-600 data-[state=open]:text-primary-foreground"
+              >
+                Options
+              </MenubarTrigger>
+              <MenubarContent>
+                <MenubarCheckboxItem
+                  checked={selectOnTarget}
+                  onCheckedChange={updateSelectOnTarget}
+                  onSelect={(e) => e.preventDefault()}
+                >
+                  Select on target
+                </MenubarCheckboxItem>
+                <MenubarCheckboxItem
+                  checked={selectOnCon}
+                  onCheckedChange={updateSelectOnCon}
+                  onSelect={(e) => e.preventDefault()}
+                >
+                  Select on consider
+                </MenubarCheckboxItem>
+                <MenubarCheckboxItem
+                  checked={deselectOnUntarget}
+                  onCheckedChange={updateDeselectOnUntarget}
+                  onSelect={(e) => e.preventDefault()}
+                >
+                  Deselect on untarget
+                </MenubarCheckboxItem>
+                <MenubarCheckboxItem
+                  checked={fastMachine}
+                  onCheckedChange={toggleFastMachine}
+                  onSelect={(e) => e.preventDefault()}
+                  disabled={status !== 'open'}
+                >
+                  Fast machine
+                </MenubarCheckboxItem>
+                <MenubarLabel className="max-w-[18rem] pt-0 pl-8 text-[11px] font-normal text-muted-foreground whitespace-normal">
+                  When enabled, distance-to-player uses 3D float math; off
+                  uses 2D integer approximation. Takes effect on the next
+                  position update.
+                </MenubarLabel>
+              </MenubarContent>
+            </MenubarMenu>
+          </Menubar>
           <button
             type="button"
             onClick={() => setSettingsOpen(true)}
@@ -256,23 +364,6 @@ export function App() {
           >
             ⚙
           </button>
-          <span className="mx-1 h-4 w-px bg-neutral-700" aria-hidden />
-          {PANEL_DEFS.map((p) => (
-            <button
-              key={p.key}
-              type="button"
-              onClick={() => togglePanel(p.key)}
-              aria-pressed={visibility[p.key]}
-              className={
-                'rounded px-2 py-0.5 text-xs transition-colors ' +
-                (visibility[p.key]
-                  ? 'bg-blue-700 text-white hover:bg-blue-600'
-                  : 'border border-neutral-700 text-neutral-400 hover:border-neutral-500 hover:text-neutral-200')
-              }
-            >
-              {p.label}
-            </button>
-          ))}
         </div>
       </header>
       <div className="flex min-h-0 flex-1">
@@ -378,14 +469,29 @@ export function App() {
       </div>
       <SettingsModal
         open={settingsOpen}
-        title="Settings"
+        title="Preferences"
         onClose={() => setSettingsOpen(false)}
       >
-        <SettingsContent
+        <PreferencesPanel
           store={store}
           client={clientRef.current}
           tick={tick}
         />
+      </SettingsModal>
+      <SettingsModal
+        open={filtersOpen}
+        title="Filters"
+        onClose={() => setFiltersOpen(false)}
+      >
+        {clientRef.current ? (
+          <FilterRulesPanel
+            store={store}
+            client={clientRef.current}
+            tick={tick}
+          />
+        ) : (
+          <div className="px-4 py-6 text-xs text-neutral-500">Connecting…</div>
+        )}
       </SettingsModal>
     </main>
   );
