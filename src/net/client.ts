@@ -2,7 +2,10 @@ import { create, fromBinary, toBinary } from '@bufbuild/protobuf';
 import {
   AddFilterRuleSchema,
   ClientEnvelopeSchema,
+  EditFilterRuleSchema,
+  ReloadFiltersSchema,
   RemoveFilterRuleSchema,
+  SaveFiltersSchema,
   SetPrefSchema,
   SubscribeSchema,
   Topic,
@@ -119,6 +122,58 @@ export class SeqClient {
       payload: {
         case: 'removeFilterRule',
         value: create(RemoveFilterRuleSchema, { filterType, pattern, perZone }),
+      },
+    });
+    this.send(env);
+  }
+
+  // Atomic filter-rule edit (replace pattern, keep type + scope). The
+  // daemon does remove(old) + add(new) under one filtersChanged emit, so
+  // other tabs see a single FilterRulesUpdate instead of a transient
+  // empty state. To change type or scope, use removeFilterRule + addFilterRule.
+  editFilterRule(
+    filterType: number,
+    oldPattern: string,
+    newPattern: string,
+    perZone: boolean,
+  ): void {
+    const env = create(ClientEnvelopeSchema, {
+      payload: {
+        case: 'editFilterRule',
+        value: create(EditFilterRuleSchema, {
+          filterType,
+          oldPattern,
+          newPattern,
+          perZone,
+        }),
+      },
+    });
+    this.send(env);
+  }
+
+  // Persist the daemon's in-memory filter rules to disk. Mirrors
+  // showeq-c's "Save Filters" / "Save Zone Filters" menu items —
+  // mutations are in-memory only until this is called, on purpose.
+  // perZone=false writes the global filters file; true writes the
+  // current zone's overlay file.
+  saveFilters(perZone: boolean): void {
+    const env = create(ClientEnvelopeSchema, {
+      payload: {
+        case: 'saveFilters',
+        value: create(SaveFiltersSchema, { perZone }),
+      },
+    });
+    this.send(env);
+  }
+
+  // Trigger a daemon-side re-read of filter XML files from disk. Used when
+  // an operator has edited the files outside the daemon. The daemon emits
+  // a fresh FilterRulesUpdate to every connected client on success.
+  reloadFilters(): void {
+    const env = create(ClientEnvelopeSchema, {
+      payload: {
+        case: 'reloadFilters',
+        value: create(ReloadFiltersSchema, {}),
       },
     });
     this.send(env);
