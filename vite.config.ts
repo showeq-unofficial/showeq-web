@@ -7,6 +7,7 @@ import { dirname, resolve } from 'node:path';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
+  base: process.env.GITHUB_ACTIONS ? '/showeq-web/' : '/',
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
