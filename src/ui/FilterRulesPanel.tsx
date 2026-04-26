@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { SeqClient } from '../net/client';
 import type { SpawnStore } from '../state/store';
-import { FILTERS, tintForFilterFlags } from './filterflags';
+import { FILTERS, swatchForFilterTypeId } from './filterflags';
 
 // Filter rule editor. Master/detail layout: left rail lists the 7 filter
 // types with rule counts; right pane shows the focused type's rules and
@@ -88,7 +88,7 @@ export function FilterRulesPanel({
       <div className="flex flex-1 overflow-hidden">
         <ul className="flex w-[200px] flex-col border-r border-neutral-800 bg-bg-panel/40 py-1 text-xs">
           {FILTER_TYPE_IDS.map((id) => {
-            const tint = tintForFilterFlags(1 << id);
+            const swatch = swatchForFilterTypeId(id);
             const isSelected = id === selectedType;
             const total = (rulesByType.get(id) ?? []).length;
             const visible = (rulesByType.get(id) ?? []).filter(matchesSearch).length;
@@ -109,8 +109,8 @@ export function FilterRulesPanel({
                     <span
                       aria-hidden
                       className={
-                        'inline-block h-2.5 w-2.5 rounded-sm border border-neutral-700 ' +
-                        (tint || 'bg-neutral-800')
+                        'inline-block h-2.5 w-2.5 rounded-sm border border-neutral-600 ' +
+                        swatch
                       }
                     />
                     {FILTERS[id].label}
@@ -187,8 +187,8 @@ function RulePane({
         <span
           aria-hidden
           className={
-            'inline-block h-2.5 w-2.5 rounded-sm border border-neutral-700 ' +
-            (tintForFilterFlags(1 << typeId) || 'bg-neutral-800')
+            'inline-block h-2.5 w-2.5 rounded-sm border border-neutral-600 ' +
+            swatchForFilterTypeId(typeId)
           }
         />
         <span className="text-neutral-200">{FILTERS[typeId].label}</span>
