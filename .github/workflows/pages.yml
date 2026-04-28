@@ -24,12 +24,7 @@ jobs:
       - uses: actions/checkout@v5
         with:
           path: showeq-web
-
-      - name: checkout proto alongside
-        uses: actions/checkout@v5
-        with:
-          repository: ${{ github.repository_owner }}/showeq-proto
-          path: showeq-proto
+          submodules: recursive
 
       - uses: oven-sh/setup-bun@v2
         with:
