@@ -66,14 +66,17 @@
 
 @media (prefers-color-scheme: light) {
   :root {
-    --color-bg-base: #ffffff;
-    --color-bg-panel: #f9fafb;     /* gray-50 */
-    --color-bg-alt: #f3f4f6;       /* gray-100 — floats above panels */
-    --background: #ffffff;
+    /* "Soft white" page so the UI doesn't glare. Surfaces sit at gray-200
+       (~90% brightness); popovers/headers float one notch lighter at
+       gray-100; borders/hover use gray-300 for contrast against gray-200. */
+    --color-bg-base: #e5e7eb;      /* gray-200 — page bg */
+    --color-bg-panel: #e5e7eb;     /* same as base — panels delineated by border */
+    --color-bg-alt: #f3f4f6;       /* gray-100 — panel headers / floats above */
+    --background: #e5e7eb;
     --foreground: #111827;         /* gray-900 */
-    --card: #f9fafb;
+    --card: #e5e7eb;
     --card-foreground: #111827;
-    --popover: #ffffff;
+    --popover: #f3f4f6;            /* gray-100 — floats brighter than panels */
     --popover-foreground: #111827;
     --primary: #1d4ed8;            /* blue-700, kept across themes */
     --primary-foreground: #ffffff;
@@ -81,12 +84,12 @@
     --secondary-foreground: #111827;
     --muted: #f3f4f6;
     --muted-foreground: #6b7280;   /* gray-500 */
-    --accent: #e5e7eb;             /* gray-200 — hover */
+    --accent: #d1d5db;             /* gray-300 — hover, darker than panel */
     --accent-foreground: #111827;
     --destructive: #b91c1c;
     --destructive-foreground: #ffffff;
-    --border: #e5e7eb;             /* gray-200 */
-    --input: #d1d5db;              /* gray-300 */
+    --border: #d1d5db;             /* gray-300 — visible against gray-200 panels */
+    --input: #9ca3af;              /* gray-400 — input borders pop */
     --ring: #2563eb;
   }
 }
