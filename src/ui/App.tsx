@@ -162,7 +162,13 @@ export function App() {
   };
 
   useEffect(() => {
-    const id = setInterval(() => setTick((t) => t + 1), 250);
+    // Coarse tick that drives re-render of panels reading from the
+    // mutate-in-place SpawnStore. 1Hz is a deliberate trade: distance
+    // columns / hp percentages refresh once a second instead of every
+    // 250ms, but with hundreds of spawns in a busy zone the 4Hz cadence
+    // pegged the React reconciler (TanStack Table reorders by distance,
+    // which fires hundreds of <tbody> insertBefore mutations per tick).
+    const id = setInterval(() => setTick((t) => t + 1), 1000);
     return () => clearInterval(id);
   }, []);
 
@@ -387,7 +393,6 @@ export function App() {
                 >
                   <SpawnList
                     store={store}
-                    tick={tick}
                     selectedId={selectedId}
                     onSelect={onSelect}
                   />

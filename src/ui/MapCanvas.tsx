@@ -113,6 +113,20 @@ export function MapCanvas({
     localStorage.setItem('map.showGrid', showGrid ? '1' : '0');
   }, [showGrid]);
   const GRID_RESOLUTION = 500;
+  // Render-rate cap. 0 = uncapped (every rAF tick paints). Otherwise we
+  // gate the actual draw on `now - lastPaint >= 1000 / cap`. rAF still
+  // fires at vsync so the throttle skips paints rather than sleeping —
+  // browser already suspends rAF in inactive tabs.
+  const [fpsCap, setFpsCap] = useState<number>(() => {
+    const raw = localStorage.getItem('map.fpsCap');
+    const n = raw == null ? 0 : Number(raw);
+    return Number.isFinite(n) && n >= 0 ? n : 0;
+  });
+  const fpsCapRef = useRef(fpsCap);
+  useEffect(() => {
+    fpsCapRef.current = fpsCap;
+    localStorage.setItem('map.fpsCap', String(fpsCap));
+  }, [fpsCap]);
 
   // Detect zone change → reset view + show all layers in the new geometry.
   useEffect(() => {
@@ -275,7 +289,26 @@ export function MapCanvas({
     if (!ctx) return;
 
     let frame = 0;
+    // Sliding 1-second frame counter for the HUD's fps line. rAF fires
+    // continuously, so this measures actual paint cadence (not just
+    // state changes the way iced-miseru's cache-driven counter does).
+    const fpsStats = { count: 0, lastReset: 0, fps: 0 };
+    let lastPaint = 0;
     const render = () => {
+      const cap = fpsCapRef.current;
+      if (cap > 0) {
+        const now = performance.now();
+        const interval = 1000 / cap;
+        // Subtract a half-millisecond slack so a vsync tick that lands
+        // a hair early still counts. Without this a 60Hz display +
+        // cap=60 drops every other frame because rAF fires at ~16.66ms
+        // intervals while the gate wants exactly 16.66ms+.
+        if (now - lastPaint < interval - 0.5) {
+          frame = requestAnimationFrame(render);
+          return;
+        }
+        lastPaint = now;
+      }
       const dpr = window.devicePixelRatio || 1;
       const w = canvas.width / dpr;
       const h = canvas.height / dpr;
@@ -526,6 +559,16 @@ export function MapCanvas({
         }
       }
 
+      const now = performance.now();
+      if (fpsStats.lastReset === 0) fpsStats.lastReset = now;
+      fpsStats.count++;
+      const elapsed = now - fpsStats.lastReset;
+      if (elapsed >= 1000) {
+        fpsStats.fps = (fpsStats.count * 1000) / elapsed;
+        fpsStats.count = 0;
+        fpsStats.lastReset = now;
+      }
+
       ctx.fillStyle = 'rgba(255,255,255,0.7)';
       ctx.font = '12px system-ui';
       const zoneLabel = store.zoneLongName() || store.zone() || '(none)';
@@ -533,6 +576,7 @@ export function MapCanvas({
       ctx.fillText(`spawns: ${spawns.length}`, 8, 32);
       ctx.fillText(`seq: ${store.seq()}`, 8, 48);
       ctx.fillText(`zoom: ${viewScaleRef.current.toFixed(2)}x`, 8, 64);
+      ctx.fillText(`fps: ${fpsStats.fps.toFixed(0)}`, 8, 80);
 
       // Publish hits for hit-testing in mouse handlers. Done last so any
       // dot painted this frame is selectable on the next event.
@@ -630,6 +674,18 @@ export function MapCanvas({
             className="flex-1 accent-blue-500"
           />
           <span className="w-8 shrink-0 text-right tabular-nums">{fovDistance}</span>
+        </label>
+        <label className="mb-2 flex items-center gap-1 text-[11px] text-neutral-300">
+          <span className="w-7 shrink-0 text-neutral-400">FPS</span>
+          <select
+            value={fpsCap}
+            onChange={(e) => setFpsCap(Number(e.target.value))}
+            className="flex-1 rounded border border-neutral-700 bg-bg-alt px-1 py-0.5 text-[11px] text-neutral-300"
+          >
+            <option value={0}>uncap</option>
+            <option value={30}>30</option>
+            <option value={60}>60</option>
+          </select>
         </label>
         <label className="mb-2 flex cursor-pointer items-center gap-1 text-[11px] text-neutral-300">
           <input

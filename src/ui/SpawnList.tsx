@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   createColumnHelper,
   flexRender,
@@ -91,14 +91,29 @@ function distanceSq(a: Spawn, b: Spawn | undefined): number {
   return dx * dx + dy * dy + dz * dz;
 }
 
+// Refresh-rate presets (frames per minute) — matches the legacy
+// showeq-c spawnlist2 spinbox (showeq/src/spawnlist2.cpp:97-101) but
+// surfaced as discrete options instead of a free-form spinner so the
+// header stays compact. 5 FPM = once every 12s, 60 FPM = once a
+// second. Default 10 FPM (= every 6s) is the legacy default; on a
+// busy zone the table reorders by distance every refresh so this
+// directly controls how much main-thread work the panel does.
+const FPM_OPTIONS = [5, 10, 15, 20, 30, 60] as const;
+const FPM_DEFAULT = 10;
+
+function loadFpm(): number {
+  const raw = localStorage.getItem('spawnlist.fpm');
+  const n = raw == null ? FPM_DEFAULT : Number(raw);
+  if (!Number.isFinite(n)) return FPM_DEFAULT;
+  return FPM_OPTIONS.includes(n as typeof FPM_OPTIONS[number]) ? n : FPM_DEFAULT;
+}
+
 export function SpawnList({
   store,
-  tick,
   selectedId,
   onSelect,
 }: {
   store: SpawnStore;
-  tick: number;
   selectedId: number | null;
   onSelect: (id: number | null) => void;
 }) {
@@ -125,9 +140,25 @@ export function SpawnList({
   const categoriesState = store.categoriesState();
   const categories = categoriesState?.categories ?? [];
 
+  // Per-panel refresh ticker. SpawnList does its own setInterval here
+  // rather than reading the global App tick — sorting + reconciling
+  // hundreds of rows is the most expensive panel re-render in the
+  // app, and the user should be able to dial it independently of
+  // every other panel.
+  const [fpm, setFpm] = useState<number>(loadFpm);
+  useEffect(() => {
+    localStorage.setItem('spawnlist.fpm', String(fpm));
+  }, [fpm]);
+  const [localTick, setLocalTick] = useState(0);
+  useEffect(() => {
+    const interval = Math.round(60_000 / fpm);
+    const id = setInterval(() => setLocalTick((t) => t + 1), interval);
+    return () => clearInterval(id);
+  }, [fpm]);
+
   const rows = useMemo<Row[]>(() => {
-    // `tick` is just a dependency to force recomputation each frame.
-    void tick;
+    // `localTick` forces the row rebuild on the chosen FPM cadence.
+    void localTick;
     const player = store.player();
     const pLevel = player?.level ?? 0;
     const out: Row[] = [];
@@ -155,13 +186,19 @@ export function SpawnList({
       });
     }
     return out;
-  }, [store, categoryFilter, hideFiltered, tick]);
+  }, [store, categoryFilter, hideFiltered, localTick]);
 
   const table = useReactTable({
     data: rows,
     columns,
     state: { sorting },
     onSortingChange: setSorting,
+    // Key rows by spawn id, not by data-array index. Without this every
+    // spawn add/remove shifts every subsequent row's TanStack id, React
+    // sees the whole tail of <tbody> as new, and the browser unmount/
+    // remount churn dominates the per-tick cost (saw ~50 tr replacements
+    // per second on a busy zone).
+    getRowId: (row) => String(row.id),
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
   });
@@ -209,10 +246,33 @@ export function SpawnList({
           Tints
         </label>
       </div>
-      <div className="flex items-center justify-between border-b border-neutral-800 px-2 py-1 text-[11px] text-neutral-400">
+      <div className="flex items-center justify-between gap-2 border-b border-neutral-800 px-2 py-1 text-[11px] text-neutral-400">
         <span>{rows.length} spawn{rows.length === 1 ? '' : 's'}</span>
         <span>player lvl {store.player()?.level ?? '–'}</span>
+        <label
+          className="flex items-center gap-1"
+          title="Refresh rate in frames per minute (5 = every 12s, 60 = every 1s). Mirrors legacy showeq-c spawnlist2 FPM spinbox."
+        >
+          <span className="text-neutral-500">FPM</span>
+          <select
+            value={fpm}
+            onChange={(e) => setFpm(Number(e.target.value))}
+            className="rounded border border-neutral-700 bg-bg-alt px-1 py-0.5 text-[11px] text-neutral-300"
+          >
+            {FPM_OPTIONS.map((v) => (
+              <option key={v} value={v}>{v}</option>
+            ))}
+          </select>
+        </label>
       </div>
+      {/*
+        TODO(perf): virtualize this table with @tanstack/react-virtual.
+        On busy zones we mount 300+ <tr>s and TanStack reorders by
+        distance every refresh — only ~30 rows are ever visible. See
+        NICE_TO_HAVE.md "Virtualize SpawnList". Current FPM control +
+        stable getRowId keep this acceptable but it's still O(rows) per
+        refresh.
+      */}
       <div className="flex-1 overflow-auto">
         <table className="w-full border-collapse text-xs">
           <thead className="sticky top-0 bg-bg-alt">
