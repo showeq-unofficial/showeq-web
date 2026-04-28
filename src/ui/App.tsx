@@ -3,7 +3,6 @@ import {
   Menubar,
   MenubarCheckboxItem,
   MenubarContent,
-  MenubarLabel,
   MenubarMenu,
   MenubarSeparator,
   MenubarTrigger,
@@ -140,14 +139,6 @@ export function App() {
   // daemon (e.g. FilterRulesPanel). Refreshed each time the URL changes.
   const clientRef = useRef<SeqClient | null>(null);
 
-  const fastMachinePref = store.pref('Misc', 'FastMachine');
-  const fastMachine =
-    fastMachinePref?.value.case === 'boolValue'
-      ? fastMachinePref.value.value
-      : true;
-  const toggleFastMachine = (v: boolean) => {
-    clientRef.current?.setPref('Misc', 'FastMachine', { boolValue: v });
-  };
   const updateSelectOnCon = (v: boolean) => {
     setSelectOnCon(v);
     localPrefs.setSelectOnConsider(v);
@@ -345,19 +336,6 @@ export function App() {
                 >
                   Deselect on untarget
                 </MenubarCheckboxItem>
-                <MenubarCheckboxItem
-                  checked={fastMachine}
-                  onCheckedChange={toggleFastMachine}
-                  onSelect={(e) => e.preventDefault()}
-                  disabled={status !== 'connected'}
-                >
-                  Fast machine
-                </MenubarCheckboxItem>
-                <MenubarLabel className="max-w-[18rem] pt-0 pl-8 text-[11px] font-normal text-muted-foreground whitespace-normal">
-                  When enabled, distance-to-player uses 3D float math; off
-                  uses 2D integer approximation. Takes effect on the next
-                  position update.
-                </MenubarLabel>
               </MenubarContent>
             </MenubarMenu>
           </Menubar>

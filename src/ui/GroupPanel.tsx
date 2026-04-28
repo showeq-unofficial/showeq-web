@@ -12,9 +12,12 @@ function hpPct(cur: number, max: number): number {
   return Math.max(0, Math.min(100, (cur / max) * 100));
 }
 
-function distance(ax: number, ay: number, bx: number, by: number): number {
-  const dx = ax - bx, dy = ay - by;
-  return Math.sqrt(dx * dx + dy * dy);
+function distance(
+  ax: number, ay: number, az: number,
+  bx: number, by: number, bz: number,
+): number {
+  const dx = ax - bx, dy = ay - by, dz = az - bz;
+  return Math.sqrt(dx * dx + dy * dy + dz * dz);
 }
 
 export function GroupPanel({ store, tick }: { store: SpawnStore; tick: number }) {
@@ -44,7 +47,10 @@ export function GroupPanel({ store, tick }: { store: SpawnStore; tick: number })
     const hp = spawn ? hpPct(spawn.hpCur, spawn.hpMax) : -1;
     const d =
       spawn && spawn.pos && player?.pos
-        ? distance(spawn.pos.x, spawn.pos.y, player.pos.x, player.pos.y)
+        ? distance(
+            spawn.pos.x, spawn.pos.y, spawn.pos.z,
+            player.pos.x, player.pos.y, player.pos.z,
+          )
         : -1;
     return {
       slot: i,
