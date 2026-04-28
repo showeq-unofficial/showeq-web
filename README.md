@@ -13,19 +13,18 @@ renders spawns, zones, and player state in the browser.
 
 ## Quick start
 
-`bun run gen` runs `buf generate ../showeq-proto`, so the
+`bun run gen` runs `buf generate proto`, where `proto/` is the
 [`showeq-proto`](https://github.com/showeq-unofficial/showeq-proto)
-repo must be checked out as a sibling directory before generating —
-the same parent dir holds both repos:
+git submodule. Initialize it on first checkout:
 
 ```sh
-# Once, in the directory you want both repos under:
-git clone git@github.com:showeq-unofficial/showeq-proto.git
-git clone git@github.com:showeq-unofficial/showeq-web.git
+git clone --recurse-submodules https://github.com/showeq-unofficial/showeq-web.git
+# or, if already cloned:
+git submodule update --init --recursive
 
 cd showeq-web
 bun install
-bun run gen           # generates src/gen/ from ../showeq-proto
+bun run gen           # generates src/gen/ from proto/
 bun run dev           # starts dev server on :5173
 ```
 

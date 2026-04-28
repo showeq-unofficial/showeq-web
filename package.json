@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "gen": "buf generate ../showeq-proto",
+    "gen": "buf generate proto",
     "typecheck": "tsc -b --noEmit",
     "smoke": "bun scripts/smoke-test.ts",
     "test": "vitest run",
