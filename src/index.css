@@ -33,12 +33,15 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
-/* shadcn theme — dark only (the app has no light/dark toggle).
-   Tokens mapped to the app's existing blueish-dark palette so shadcn
-   components (menubar, dropdown, dialog, …) inherit our look without
-   per-instance className overrides. */
+/* shadcn theme tokens. Dark is the default; the prefers-color-scheme
+   media query below overrides for light. Tokens map to the app's
+   blueish-dark palette so shadcn components (menubar, dropdown, dialog,
+   …) inherit our look without per-instance className overrides.
+   Note: many panels still use hardcoded `text-neutral-*` / `border-neutral-*`
+   utilities and won't fully invert in light mode until those migrate to
+   semantic tokens. PR 1 is the plumbing; PR 2 is the audit pass. */
 :root {
-  color-scheme: dark;
+  color-scheme: light dark;
   --radius: 0.375rem;
   --background: #0a0e12;          /* = --color-bg-base */
   --foreground: #e5e7eb;
@@ -61,10 +64,37 @@
   --ring: #2563eb;                /* blue-600 */
 }
 
+@media (prefers-color-scheme: light) {
+  :root {
+    --color-bg-base: #ffffff;
+    --color-bg-panel: #f9fafb;     /* gray-50 */
+    --color-bg-alt: #f3f4f6;       /* gray-100 — floats above panels */
+    --background: #ffffff;
+    --foreground: #111827;         /* gray-900 */
+    --card: #f9fafb;
+    --card-foreground: #111827;
+    --popover: #ffffff;
+    --popover-foreground: #111827;
+    --primary: #1d4ed8;            /* blue-700, kept across themes */
+    --primary-foreground: #ffffff;
+    --secondary: #f3f4f6;
+    --secondary-foreground: #111827;
+    --muted: #f3f4f6;
+    --muted-foreground: #6b7280;   /* gray-500 */
+    --accent: #e5e7eb;             /* gray-200 — hover */
+    --accent-foreground: #111827;
+    --destructive: #b91c1c;
+    --destructive-foreground: #ffffff;
+    --border: #e5e7eb;             /* gray-200 */
+    --input: #d1d5db;              /* gray-300 */
+    --ring: #2563eb;
+  }
+}
+
 html, body, #root {
   height: 100%;
   margin: 0;
-  background: #0a0e12;
-  color: #e5e7eb;
+  background: var(--background);
+  color: var(--foreground);
   font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
