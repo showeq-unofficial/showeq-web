@@ -74,19 +74,19 @@ export function FilterRulesPanel({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center gap-2 border-b border-neutral-800 px-3 py-2 text-xs">
+      <div className="flex items-center gap-2 border-b border-border px-3 py-2 text-xs">
         <input
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search patterns…"
           spellCheck={false}
-          className="flex-1 rounded border border-neutral-700 bg-bg-base px-2 py-1 font-mono text-[11px] text-neutral-200 placeholder:text-neutral-600 focus:border-blue-500 focus:outline-none"
+          className="flex-1 rounded border border-border bg-bg-base px-2 py-1 font-mono text-[11px] text-foreground placeholder:text-muted-foreground/60 focus:border-blue-500 focus:outline-none"
         />
         <DiskMenu client={client} currentZone={currentZone} />
       </div>
       <div className="flex flex-1 overflow-hidden">
-        <ul className="flex w-[200px] flex-col border-r border-neutral-800 bg-bg-panel/40 py-1 text-xs">
+        <ul className="flex w-[200px] flex-col border-r border-border bg-bg-panel/40 py-1 text-xs">
           {FILTER_TYPE_IDS.map((id) => {
             const swatch = swatchForFilterTypeId(id);
             const isSelected = id === selectedType;
@@ -101,15 +101,15 @@ export function FilterRulesPanel({
                   className={
                     'flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left ' +
                     (isSelected
-                      ? 'bg-bg-base text-neutral-100'
-                      : 'text-neutral-300 hover:bg-bg-base/60')
+                      ? 'bg-bg-base text-foreground'
+                      : 'text-foreground hover:bg-bg-base/60')
                   }
                 >
                   <span className="flex items-center gap-2">
                     <span
                       aria-hidden
                       className={
-                        'inline-block h-2.5 w-2.5 rounded-sm border border-neutral-600 ' +
+                        'inline-block h-2.5 w-2.5 rounded-sm border border-border ' +
                         swatch
                       }
                     />
@@ -119,10 +119,10 @@ export function FilterRulesPanel({
                     className={
                       'rounded px-1.5 text-[10px] tabular-nums ' +
                       (showFraction
-                        ? 'bg-blue-900/50 text-blue-200'
+                        ? 'bg-blue-900/50 text-blue-700 dark:text-blue-200'
                         : total === 0
-                          ? 'text-neutral-600'
-                          : 'bg-neutral-800 text-neutral-300')
+                          ? 'text-muted-foreground/60'
+                          : 'bg-border text-foreground')
                     }
                   >
                     {showFraction ? `${visible}/${total}` : total}
@@ -183,17 +183,17 @@ function RulePane({
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <header className="flex items-baseline gap-2 border-b border-neutral-800 px-3 py-1.5 text-[11px] uppercase tracking-wide">
+      <header className="flex items-baseline gap-2 border-b border-border px-3 py-1.5 text-[11px] uppercase tracking-wide">
         <span
           aria-hidden
           className={
-            'inline-block h-2.5 w-2.5 rounded-sm border border-neutral-600 ' +
+            'inline-block h-2.5 w-2.5 rounded-sm border border-border ' +
             swatchForFilterTypeId(typeId)
           }
         />
-        <span className="text-neutral-200">{FILTERS[typeId].label}</span>
-        <span className="text-neutral-600">·</span>
-        <span className="normal-case tracking-normal text-neutral-500">
+        <span className="text-foreground">{FILTERS[typeId].label}</span>
+        <span className="text-muted-foreground/60">·</span>
+        <span className="normal-case tracking-normal text-muted-foreground">
           {rules.length} rule{rules.length === 1 ? '' : 's'}
           {searchActive && rules.length !== totalRules
             ? ` (of ${totalRules})`
@@ -202,7 +202,7 @@ function RulePane({
       </header>
       <ul className="flex-1 overflow-auto">
         {rules.length === 0 ? (
-          <li className="px-3 py-3 text-[11px] italic text-neutral-600">
+          <li className="px-3 py-3 text-[11px] italic text-muted-foreground/60">
             {searchActive
               ? '(no patterns match the search)'
               : '(no rules — add one below)'}
@@ -219,7 +219,7 @@ function RulePane({
           ))
         )}
       </ul>
-      <div className="flex flex-col gap-1 border-t border-neutral-800 bg-bg-panel/40 px-3 py-2">
+      <div className="flex flex-col gap-1 border-t border-border bg-bg-panel/40 px-3 py-2">
         <div className="flex items-center gap-1">
           <input
             value={draft}
@@ -232,17 +232,17 @@ function RulePane({
             }}
             placeholder="pattern (e.g. Name:1-50)"
             spellCheck={false}
-            className="flex-1 rounded border border-neutral-700 bg-bg-base px-2 py-1 font-mono text-[11px] text-neutral-200 placeholder:text-neutral-600 focus:border-blue-500 focus:outline-none"
+            className="flex-1 rounded border border-border bg-bg-base px-2 py-1 font-mono text-[11px] text-foreground placeholder:text-muted-foreground/60 focus:border-blue-500 focus:outline-none"
           />
           <button
             type="button"
             onClick={onAdd}
-            className="rounded border border-neutral-700 bg-bg-alt px-2 py-1 text-[11px] text-neutral-300 hover:bg-bg-base"
+            className="rounded border border-border bg-bg-alt px-2 py-1 text-[11px] text-foreground hover:bg-bg-base"
           >
             + add
           </button>
         </div>
-        <div className="flex items-center gap-2 text-[10px] text-neutral-400">
+        <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
           <span>scope:</span>
           <SegmentedScope
             value={effectiveScope}
@@ -293,14 +293,14 @@ function DiskMenu({
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="rounded border border-neutral-700 bg-bg-alt px-2 py-1 text-[11px] text-neutral-300 hover:bg-bg-base"
+        className="rounded border border-border bg-bg-alt px-2 py-1 text-[11px] text-foreground hover:bg-bg-base"
       >
         Disk ▾
       </button>
       {open && (
         <div
           role="menu"
-          className="absolute right-0 z-10 mt-1 min-w-[200px] overflow-hidden rounded border border-neutral-700 bg-bg-panel text-[11px] shadow-lg"
+          className="absolute right-0 z-10 mt-1 min-w-[200px] overflow-hidden rounded border border-border bg-bg-panel text-[11px] shadow-lg"
         >
           <MenuItem
             label="↻ Reload from disk"
@@ -350,8 +350,8 @@ function MenuItem({
       className={
         'flex w-full items-center px-3 py-1.5 text-left ' +
         (disabled
-          ? 'cursor-not-allowed text-neutral-600'
-          : 'text-neutral-200 hover:bg-bg-base')
+          ? 'cursor-not-allowed text-muted-foreground/60'
+          : 'text-foreground hover:bg-bg-base')
       }
     >
       {label}
@@ -360,7 +360,7 @@ function MenuItem({
 }
 
 function MenuDivider() {
-  return <div aria-hidden className="border-t border-neutral-800" />;
+  return <div aria-hidden className="border-t border-border" />;
 }
 
 function RuleRow({
@@ -398,7 +398,7 @@ function RuleRow({
   };
 
   return (
-    <li className="flex items-center gap-2 border-b border-neutral-900 px-3 py-1 last:border-b-0">
+    <li className="flex items-center gap-2 border-b border-border px-3 py-1 last:border-b-0">
       <ScopeBadge perZone={rule.perZone} zoneName={currentZone} />
       {editing ? (
         <input
@@ -416,14 +416,14 @@ function RuleRow({
             }
           }}
           spellCheck={false}
-          className="flex-1 rounded border border-blue-500 bg-bg-base px-1 py-0.5 font-mono text-[11px] text-neutral-100 focus:outline-none"
+          className="flex-1 rounded border border-blue-500 bg-bg-base px-1 py-0.5 font-mono text-[11px] text-foreground focus:outline-none"
         />
       ) : (
         <button
           type="button"
           onClick={() => setEditing(true)}
           title="Click to edit"
-          className="flex-1 truncate text-left font-mono text-[11px] text-neutral-200 hover:text-neutral-50"
+          className="flex-1 truncate text-left font-mono text-[11px] text-foreground hover:text-foreground"
         >
           {rule.pattern}
         </button>
@@ -432,7 +432,7 @@ function RuleRow({
         type="button"
         onClick={() => client.removeFilterRule(typeId, rule.pattern, rule.perZone)}
         title="Remove rule"
-        className="rounded px-1.5 text-[10px] text-neutral-500 hover:bg-bg-base hover:text-red-400"
+        className="rounded px-1.5 text-[10px] text-muted-foreground hover:bg-bg-base hover:text-red-600 dark:hover:text-red-400"
       >
         ×
       </button>
@@ -450,7 +450,7 @@ function ScopeBadge({
   if (perZone) {
     return (
       <span
-        className="rounded bg-blue-900/40 px-1 py-px text-[9px] uppercase tracking-wide text-blue-200"
+        className="rounded bg-blue-900/40 px-1 py-px text-[9px] uppercase tracking-wide text-blue-700 dark:text-blue-200"
         title={`Per-zone rule for ${zoneName || 'current zone'}`}
       >
         {zoneName || 'zone'}
@@ -459,7 +459,7 @@ function ScopeBadge({
   }
   return (
     <span
-      className="rounded bg-neutral-800 px-1 py-px text-[9px] uppercase tracking-wide text-neutral-400"
+      className="rounded bg-border px-1 py-px text-[9px] uppercase tracking-wide text-muted-foreground"
       title="Global rule (applies in every zone)"
     >
       global
@@ -478,15 +478,15 @@ function SegmentedScope({
 }) {
   const zoneDisabled = !zoneName;
   return (
-    <div className="inline-flex overflow-hidden rounded border border-neutral-700 text-[10px]">
+    <div className="inline-flex overflow-hidden rounded border border-border text-[10px]">
       <button
         type="button"
         onClick={() => onChange('global')}
         className={
           'px-2 py-0.5 ' +
           (value === 'global'
-            ? 'bg-bg-base text-neutral-100'
-            : 'bg-bg-panel/40 text-neutral-400 hover:bg-bg-base/60')
+            ? 'bg-bg-base text-foreground'
+            : 'bg-bg-panel/40 text-muted-foreground hover:bg-bg-base/60')
         }
       >
         Global
@@ -499,12 +499,12 @@ function SegmentedScope({
           zoneDisabled ? 'No zone loaded' : `Apply only in ${zoneName}`
         }
         className={
-          'border-l border-neutral-700 px-2 py-0.5 ' +
+          'border-l border-border px-2 py-0.5 ' +
           (zoneDisabled
-            ? 'cursor-not-allowed bg-bg-panel/20 text-neutral-700'
+            ? 'cursor-not-allowed bg-bg-panel/20 text-foreground/40'
             : value === 'zone'
-              ? 'bg-bg-base text-neutral-100'
-              : 'bg-bg-panel/40 text-neutral-400 hover:bg-bg-base/60')
+              ? 'bg-bg-base text-foreground'
+              : 'bg-bg-panel/40 text-muted-foreground hover:bg-bg-base/60')
         }
       >
         Zone: {zoneName || '(none)'}

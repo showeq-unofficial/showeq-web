@@ -43,7 +43,7 @@ export function CombatLog({ store, tick }: { store: SpawnStore; tick: number }) 
 
   if (log.length === 0) {
     return (
-      <div className="px-2 py-2 text-xs text-neutral-500">
+      <div className="px-2 py-2 text-xs text-muted-foreground">
         Waiting for combat events…
       </div>
     );
@@ -59,30 +59,30 @@ export function CombatLog({ store, tick }: { store: SpawnStore; tick: number }) 
         const isOutgoing = playerId !== 0 && e.sourceId === playerId;
         const isIncoming = playerId !== 0 && e.targetId === playerId;
         const damageColor = isOutgoing
-          ? 'text-emerald-300'
+          ? 'text-emerald-600 dark:text-emerald-300'
           : isIncoming
-          ? 'text-red-300'
-          : 'text-neutral-300';
+          ? 'text-red-600 dark:text-red-300'
+          : 'text-foreground';
         const source = e.sourceName || `#${e.sourceId}`;
         const target = e.targetName || `#${e.targetId}`;
         return (
           <div key={e.seq.toString()} className="break-words">
-            <span className={isOutgoing ? 'text-emerald-200' : 'text-neutral-200'}>
+            <span className={isOutgoing ? 'text-emerald-700 dark:text-emerald-200' : 'text-foreground'}>
               {source}
             </span>{' '}
-            <span className="text-neutral-500">{typeLabel(e.type)}</span>{' '}
-            <span className={isIncoming ? 'text-red-200' : 'text-neutral-200'}>
+            <span className="text-muted-foreground">{typeLabel(e.type)}</span>{' '}
+            <span className={isIncoming ? 'text-red-700 dark:text-red-200' : 'text-foreground'}>
               {target}
             </span>
             {e.damage !== 0 && (
               <>
                 {' '}
-                <span className="text-neutral-500">for</span>{' '}
+                <span className="text-muted-foreground">for</span>{' '}
                 <span className={damageColor}>{e.damage}</span>
               </>
             )}
             {e.spellName && (
-              <span className="text-neutral-500"> ({e.spellName})</span>
+              <span className="text-muted-foreground"> ({e.spellName})</span>
             )}
           </div>
         );

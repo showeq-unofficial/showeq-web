@@ -63,42 +63,42 @@ export function GroupPanel({ store, tick }: { store: SpawnStore; tick: number })
       {slots.map((s) => (
         <div
           key={s.slot}
-          className="flex items-center gap-2 border-b border-neutral-900 px-2 py-0.5 last:border-b-0"
+          className="flex items-center gap-2 border-b border-border px-2 py-0.5 last:border-b-0"
         >
-          <span className="w-3 shrink-0 text-[10px] text-neutral-500">
+          <span className="w-3 shrink-0 text-[10px] text-muted-foreground">
             {s.slot + 1}
           </span>
           {s.empty ? (
-            <span className="flex-1 italic text-neutral-600">empty</span>
+            <span className="flex-1 italic text-muted-foreground/60">empty</span>
           ) : (
             <>
               <span
                 className={
                   'flex-1 truncate ' +
-                  (s.inZone ? 'text-neutral-200' : 'text-neutral-500')
+                  (s.inZone ? 'text-foreground' : 'text-muted-foreground')
                 }
                 title={s.name}
               >
                 {s.name}
               </span>
-              <span className="w-12 shrink-0 truncate text-right text-[10px] text-neutral-500">
+              <span className="w-12 shrink-0 truncate text-right text-[10px] text-muted-foreground">
                 {s.level || '—'} {classNameOf(s.class_ ?? 0).slice(0, 3)}
               </span>
               <span
                 className={
                   'w-9 shrink-0 text-right font-mono text-[10px] ' +
                   (s.hpPct < 0
-                    ? 'text-neutral-600'
+                    ? 'text-muted-foreground/60'
                     : s.hpPct < 25
-                    ? 'text-red-400'
+                    ? 'text-red-600 dark:text-red-400'
                     : s.hpPct < 60
-                    ? 'text-amber-300'
-                    : 'text-emerald-300')
+                    ? 'text-amber-600 dark:text-amber-300'
+                    : 'text-emerald-600 dark:text-emerald-300')
                 }
               >
                 {s.hpPct < 0 ? '—' : `${Math.round(s.hpPct)}%`}
               </span>
-              <span className="w-12 shrink-0 text-right font-mono text-[10px] text-neutral-400">
+              <span className="w-12 shrink-0 text-right font-mono text-[10px] text-muted-foreground">
                 {s.distance < 0 ? '—' : fmt(s.distance, 4)}
               </span>
             </>

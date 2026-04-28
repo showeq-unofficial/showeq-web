@@ -134,7 +134,7 @@ export function SpawnPointList({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between border-b border-neutral-800 px-2 py-1 text-[11px] text-neutral-400">
+      <div className="flex items-center justify-between border-b border-border px-2 py-1 text-[11px] text-muted-foreground">
         <span>{rows.length} spawn point{rows.length === 1 ? '' : 's'}</span>
         <span className="font-mono">
           {rows.filter((r) => r.remainingS !== null && r.remainingS <= 0).length}
@@ -151,7 +151,7 @@ export function SpawnPointList({
                   return (
                     <th
                       key={h.id}
-                      className="select-none px-1.5 py-1 text-left font-medium text-neutral-300"
+                      className="select-none px-1.5 py-1 text-left font-medium text-foreground"
                       style={{ width: h.getSize() }}
                       onClick={h.column.getToggleSortingHandler()}
                     >
@@ -174,9 +174,9 @@ export function SpawnPointList({
                 <tr
                   key={r.id}
                   className={
-                    'border-b border-neutral-900 ' +
+                    'border-b border-border ' +
                     (overdue
-                      ? 'font-bold text-red-400 hover:bg-bg-alt/60'
+                      ? 'font-bold text-red-600 dark:text-red-400 hover:bg-bg-alt/60'
                       : 'hover:bg-bg-alt/60')
                   }
                 >

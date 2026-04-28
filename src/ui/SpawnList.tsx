@@ -36,7 +36,7 @@ const columns = [
     size: 12,
     cell: (info) => (
       <span
-        className="inline-block h-2.5 w-2.5 rounded-full"
+        className="inline-block h-2.5 w-2.5 rounded-full ring-1 ring-border"
         style={{ background: info.getValue() }}
       />
     ),
@@ -205,7 +205,7 @@ export function SpawnList({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center gap-2 border-b border-neutral-800 px-2 py-1.5 text-[11px] text-neutral-400">
+      <div className="flex items-center gap-2 border-b border-border px-2 py-1.5 text-[11px] text-muted-foreground">
         <div className="flex items-center gap-1">
           <span>Category</span>
           <CategorySelect
@@ -246,18 +246,18 @@ export function SpawnList({
           Tints
         </label>
       </div>
-      <div className="flex items-center justify-between gap-2 border-b border-neutral-800 px-2 py-1 text-[11px] text-neutral-400">
+      <div className="flex items-center justify-between gap-2 border-b border-border px-2 py-1 text-[11px] text-muted-foreground">
         <span>{rows.length} spawn{rows.length === 1 ? '' : 's'}</span>
         <span>player lvl {store.player()?.level ?? '–'}</span>
         <label
           className="flex items-center gap-1"
           title="Refresh rate in frames per minute (5 = every 12s, 60 = every 1s). Mirrors legacy showeq-c spawnlist2 FPM spinbox."
         >
-          <span className="text-neutral-500">FPM</span>
+          <span className="text-muted-foreground">FPM</span>
           <select
             value={fpm}
             onChange={(e) => setFpm(Number(e.target.value))}
-            className="rounded border border-neutral-700 bg-bg-alt px-1 py-0.5 text-[11px] text-neutral-300"
+            className="rounded border border-border bg-bg-alt px-1 py-0.5 text-[11px] text-foreground"
           >
             {FPM_OPTIONS.map((v) => (
               <option key={v} value={v}>{v}</option>
@@ -283,7 +283,7 @@ export function SpawnList({
                   return (
                     <th
                       key={h.id}
-                      className="select-none px-1.5 py-1 text-left font-medium text-neutral-300"
+                      className="select-none px-1.5 py-1 text-left font-medium text-foreground"
                       style={{ width: h.getSize() }}
                       onClick={h.column.getToggleSortingHandler()}
                     >
@@ -308,7 +308,7 @@ export function SpawnList({
                   key={r.id}
                   onClick={() => onSelect(r.original.id)}
                   className={
-                    'cursor-pointer border-b border-neutral-900 ' +
+                    'cursor-pointer border-b border-border ' +
                     (isSelected
                       ? 'bg-blue-900/40 hover:bg-blue-900/60'
                       : filterTint

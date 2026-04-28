@@ -34,16 +34,16 @@ export function SettingsModal({
       aria-label={title}
     >
       <div
-        className="flex h-[80vh] w-[min(900px,90vw)] flex-col overflow-hidden rounded-md border border-neutral-700 bg-bg-panel shadow-2xl"
+        className="flex h-[80vh] w-[min(900px,90vw)] flex-col overflow-hidden rounded-md border border-border bg-bg-panel shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="flex items-center justify-between border-b border-neutral-800 px-3 py-2">
-          <h2 className="text-sm font-semibold text-neutral-200">{title}</h2>
+        <header className="flex items-center justify-between border-b border-border px-3 py-2">
+          <h2 className="text-sm font-semibold text-foreground">{title}</h2>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close settings"
-            className="rounded px-2 py-0.5 text-neutral-400 hover:bg-bg-base hover:text-neutral-200"
+            className="rounded px-2 py-0.5 text-muted-foreground hover:bg-bg-base hover:text-foreground"
           >
             ✕
           </button>

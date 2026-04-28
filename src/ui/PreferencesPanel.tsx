@@ -101,16 +101,16 @@ export function PreferencesPanel({
   return (
     <div className="flex flex-col gap-4 px-4 py-4 text-xs">
       <section className="flex flex-col gap-2">
-        <label className="text-[11px] uppercase tracking-wide text-neutral-400">
+        <label className="text-[11px] uppercase tracking-wide text-muted-foreground">
           Capture
         </label>
         <label className="flex items-center gap-2">
-          <span className="w-20 text-neutral-300">Device</span>
+          <span className="w-20 text-foreground">Device</span>
           <select
             value={deviceCurrent}
             onChange={(e) => setDevice(e.target.value)}
             disabled={!client}
-            className="flex-1 rounded border border-neutral-700 bg-bg-base px-2 py-1 font-mono text-[11px] text-neutral-200 focus:border-blue-500 focus:outline-none disabled:opacity-50"
+            className="flex-1 rounded border border-border bg-bg-base px-2 py-1 font-mono text-[11px] text-foreground focus:border-blue-500 focus:outline-none disabled:opacity-50"
           >
             {!deviceCurrent && (
               <option value="" disabled>
@@ -129,14 +129,14 @@ export function PreferencesPanel({
             type="button"
             onClick={() => { setDevicesLoaded(false); client?.listDevices(); }}
             disabled={!client}
-            className="rounded border border-neutral-700 bg-bg-alt px-2 py-1 text-[10px] text-neutral-300 hover:bg-bg-base disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded border border-border bg-bg-alt px-2 py-1 text-[10px] text-foreground hover:bg-bg-base disabled:cursor-not-allowed disabled:opacity-50"
             title="Refresh device list"
           >
             ↻
           </button>
         </label>
         <label className="flex items-center gap-2">
-          <span className="w-20 text-neutral-300">Client IP</span>
+          <span className="w-20 text-foreground">Client IP</span>
           <input
             type="text"
             value={ipDraft}
@@ -148,26 +148,26 @@ export function PreferencesPanel({
             }}
             spellCheck={false}
             placeholder="127.0.0.0"
-            className="flex-1 rounded border border-neutral-700 bg-bg-base px-2 py-1 font-mono text-[11px] text-neutral-200 focus:border-blue-500 focus:outline-none"
+            className="flex-1 rounded border border-border bg-bg-base px-2 py-1 font-mono text-[11px] text-foreground focus:border-blue-500 focus:outline-none"
           />
           <button
             type="button"
             onClick={commitIp}
             disabled={!client || !ipDirty}
-            className="rounded border border-neutral-700 bg-bg-alt px-2 py-1 text-[10px] text-neutral-300 hover:bg-bg-base disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded border border-border bg-bg-alt px-2 py-1 text-[10px] text-foreground hover:bg-bg-base disabled:cursor-not-allowed disabled:opacity-50"
           >
             save
           </button>
         </label>
-        <p className="text-neutral-500">
+        <p className="text-muted-foreground">
           You must zone for changes to take effect — the daemon needs a
           fresh login handshake to decode a new session. Use{' '}
-          <code className="text-neutral-400">127.0.0.0</code> (or empty)
+          <code className="text-muted-foreground">127.0.0.0</code> (or empty)
           to auto-detect the next EQ client seen on the wire.
         </p>
       </section>
       <section className="flex flex-col gap-1">
-        <label className="text-[11px] uppercase tracking-wide text-neutral-400">
+        <label className="text-[11px] uppercase tracking-wide text-muted-foreground">
           Chat timestamp format
         </label>
         <div className="flex items-center gap-2">
@@ -180,21 +180,21 @@ export function PreferencesPanel({
               if (e.key === 'Escape') { setDtfDraft(dtfCurrent); }
             }}
             spellCheck={false}
-            className="flex-1 rounded border border-neutral-700 bg-bg-base px-2 py-1 font-mono text-[11px] text-neutral-200 focus:border-blue-500 focus:outline-none"
+            className="flex-1 rounded border border-border bg-bg-base px-2 py-1 font-mono text-[11px] text-foreground focus:border-blue-500 focus:outline-none"
           />
           <button
             type="button"
             onClick={commit}
             disabled={!client || !dirty}
-            className="rounded border border-neutral-700 bg-bg-alt px-2 py-1 text-[10px] text-neutral-300 hover:bg-bg-base disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded border border-border bg-bg-alt px-2 py-1 text-[10px] text-foreground hover:bg-bg-base disabled:cursor-not-allowed disabled:opacity-50"
           >
             save
           </button>
         </div>
-        <p className="text-neutral-500">
+        <p className="text-muted-foreground">
           Qt date/time format string. Examples:{' '}
-          <code className="text-neutral-400">ddd MMM dd,yyyy - hh:mm ap</code>{' '}
-          • <code className="text-neutral-400">yyyy-MM-dd HH:mm:ss</code>.
+          <code className="text-muted-foreground">ddd MMM dd,yyyy - hh:mm ap</code>{' '}
+          • <code className="text-muted-foreground">yyyy-MM-dd HH:mm:ss</code>.
           Saved daemon-side and shared across all connected clients.
         </p>
       </section>

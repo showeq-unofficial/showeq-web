@@ -26,7 +26,7 @@ import { SpawnPointList } from './SpawnPointList';
 import { StatsPanel } from './StatsPanel';
 import { VerticalResizeHandle } from './VerticalResizeHandle';
 
-type ConnStatus = 'disconnected' | 'connecting' | 'open';
+type ConnStatus = 'disconnected' | 'connecting' | 'connected';
 
 // Match the page's scheme so an https-hosted UI doesn't trip mixed-content.
 // Daemon is expected to run on the user's own machine, not the page origin.
@@ -76,7 +76,7 @@ function clampSplit(s: number): number {
 }
 
 const STATUS_BADGE: Record<ConnStatus, string> = {
-  open:         'bg-emerald-700 text-emerald-100',
+  connected:    'bg-emerald-700 text-emerald-100',
   connecting:   'bg-amber-700 text-amber-100',
   disconnected: 'bg-red-800 text-red-100',
 };
@@ -250,7 +250,7 @@ export function App() {
       if (!w) return;
       switch (w.readyState) {
         case WebSocket.CONNECTING: setStatus('connecting'); break;
-        case WebSocket.OPEN:       setStatus('open');       break;
+        case WebSocket.OPEN:       setStatus('connected');  break;
         default:                   setStatus('disconnected');
       }
     }, 500);
@@ -270,8 +270,8 @@ export function App() {
   const bothLeftPanels = visibility.spawns && visibility.spawnPoints;
 
   return (
-    <main className="flex h-screen w-screen flex-col bg-bg-base text-neutral-200">
-      <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-neutral-800 bg-bg-panel px-3 py-2">
+    <main className="flex h-screen w-screen flex-col bg-bg-base text-foreground">
+      <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border bg-bg-panel px-3 py-2">
         <h1 className="m-0 text-base font-semibold">ShowEQ</h1>
         <input
           value={urlDraft}
@@ -282,7 +282,7 @@ export function App() {
             else if (e.key === 'Escape') { setUrlDraft(url); e.currentTarget.blur(); }
           }}
           spellCheck={false}
-          className="w-80 rounded border border-neutral-700 bg-bg-base px-2 py-1 font-mono text-xs text-neutral-200 focus:border-blue-500 focus:outline-none"
+          className="w-80 rounded border border-border bg-bg-base px-2 py-1 font-mono text-xs text-foreground focus:border-blue-500 focus:outline-none"
         />
         <span className={`rounded px-2 py-0.5 text-xs ${STATUS_BADGE[status]}`}>
           {status}
@@ -349,7 +349,7 @@ export function App() {
                   checked={fastMachine}
                   onCheckedChange={toggleFastMachine}
                   onSelect={(e) => e.preventDefault()}
-                  disabled={status !== 'open'}
+                  disabled={status !== 'connected'}
                 >
                   Fast machine
                 </MenubarCheckboxItem>
@@ -366,7 +366,7 @@ export function App() {
             onClick={() => setSettingsOpen(true)}
             aria-label="Open settings"
             title="Settings"
-            className="rounded px-2 py-0.5 text-base leading-none text-neutral-400 hover:bg-bg-base hover:text-neutral-200"
+            className="rounded px-2 py-0.5 text-base leading-none text-muted-foreground hover:bg-bg-base hover:text-foreground"
           >
             ⚙
           </button>
@@ -495,7 +495,7 @@ export function App() {
             tick={tick}
           />
         ) : (
-          <div className="px-4 py-6 text-xs text-neutral-500">Connecting…</div>
+          <div className="px-4 py-6 text-xs text-muted-foreground">Connecting…</div>
         )}
       </SettingsModal>
     </main>

@@ -28,9 +28,9 @@ function Bar({
   const right = numericRight ?? (max > 0 ? `${fmt(cur)} / ${fmt(max)}` : '—');
   return (
     <div className="px-2 py-1">
-      <div className="flex items-baseline justify-between text-[10px] uppercase tracking-wide text-neutral-400">
+      <div className="flex items-baseline justify-between text-[10px] uppercase tracking-wide text-muted-foreground">
         <span>{label}</span>
-        <span className="font-mono normal-case tracking-normal text-neutral-300">
+        <span className="font-mono normal-case tracking-normal text-foreground">
           {right}
         </span>
       </div>
@@ -47,8 +47,8 @@ function Bar({
 function StatCell({ label, value }: { label: string; value: number }) {
   return (
     <div className="flex items-baseline justify-between rounded bg-bg-base px-1.5 py-1 text-xs">
-      <span className="text-[10px] uppercase tracking-wide text-neutral-400">{label}</span>
-      <span className="font-mono text-neutral-200">{value || '—'}</span>
+      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</span>
+      <span className="font-mono text-foreground">{value || '—'}</span>
     </div>
   );
 }
@@ -60,7 +60,7 @@ export function StatsPanel({ store, tick }: { store: SpawnStore; tick: number })
 
   if (!s) {
     return (
-      <div className="px-2 py-2 text-xs text-neutral-500">
+      <div className="px-2 py-2 text-xs text-muted-foreground">
         Waiting for player profile…
       </div>
     );
@@ -77,15 +77,15 @@ export function StatsPanel({ store, tick }: { store: SpawnStore; tick: number })
   return (
     <div className="flex flex-col gap-1 py-1">
       <div className="px-2 pb-1 pt-0.5">
-        <div className="text-sm font-semibold text-neutral-100">{headerLabel}</div>
-        {subLabel && <div className="text-[11px] text-neutral-400">{subLabel}</div>}
+        <div className="text-sm font-semibold text-foreground">{headerLabel}</div>
+        {subLabel && <div className="text-[11px] text-muted-foreground">{subLabel}</div>}
       </div>
 
       <Bar label="HP"   cur={s.hpCur}      max={s.hpMax}      color="bg-red-600" />
       <Bar label="Mana" cur={s.manaCur}    max={s.manaMax}    color="bg-blue-600" />
       <Bar label="Stam" cur={s.staminaCur} max={s.staminaMax} color="bg-emerald-600" />
 
-      <div className="mx-2 my-1 border-t border-neutral-800" />
+      <div className="mx-2 my-1 border-t border-border" />
 
       <Bar
         label="Exp"
@@ -102,7 +102,7 @@ export function StatsPanel({ store, tick }: { store: SpawnStore; tick: number })
         numericRight={s.aaExpMax > 0 ? `${pct(s.aaExpCur, s.aaExpMax).toFixed(1)}%` : '—'}
       />
 
-      <div className="mx-2 my-1 border-t border-neutral-800" />
+      <div className="mx-2 my-1 border-t border-border" />
 
       <div className="grid grid-cols-2 gap-1 px-2 pb-2">
         <StatCell label="STR" value={s.str} />

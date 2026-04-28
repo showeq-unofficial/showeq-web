@@ -49,16 +49,16 @@ export function CategorySelect({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-1.5 rounded border border-neutral-700 bg-bg-base px-1.5 py-0.5 text-xs text-neutral-200 hover:border-neutral-500 focus:border-blue-500 focus:outline-none"
+        className="flex items-center gap-1.5 rounded border border-border bg-bg-base px-1.5 py-0.5 text-xs text-foreground hover:border-border focus:border-blue-500 focus:outline-none"
       >
         <Swatch color={selected.color} />
         <span className="min-w-0 truncate">{selected.name}</span>
-        <span className="text-[10px] text-neutral-500">▾</span>
+        <span className="text-[10px] text-muted-foreground">▾</span>
       </button>
       {open && (
         <ul
           role="listbox"
-          className="absolute left-0 top-full z-10 mt-1 max-h-72 min-w-full overflow-y-auto rounded border border-neutral-700 bg-bg-panel py-0.5 text-xs shadow-lg"
+          className="absolute left-0 top-full z-10 mt-1 max-h-72 min-w-full overflow-y-auto rounded border border-border bg-bg-panel py-0.5 text-xs shadow-lg"
         >
           {options.map((o) => (
             <li
@@ -70,7 +70,7 @@ export function CategorySelect({
                 setOpen(false);
               }}
               className={
-                'flex cursor-pointer items-center gap-1.5 whitespace-nowrap px-2 py-1 text-neutral-200 ' +
+                'flex cursor-pointer items-center gap-1.5 whitespace-nowrap px-2 py-1 text-foreground ' +
                 (o.id === value ? 'bg-blue-900/40' : 'hover:bg-bg-alt')
               }
             >
@@ -90,7 +90,7 @@ function Swatch({ color }: { color?: string }) {
   return (
     <span
       aria-hidden="true"
-      className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm border border-neutral-700"
+      className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm border border-border"
       style={{ background: color || 'transparent' }}
     />
   );

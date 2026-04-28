@@ -23,7 +23,7 @@ export function BuffsPanel({ store, tick }: { store: SpawnStore; tick: number })
   const buffs = store.buffsState();
   if (!buffs || buffs.buffs.length === 0) {
     return (
-      <div className="px-2 py-2 text-xs text-neutral-500">
+      <div className="px-2 py-2 text-xs text-muted-foreground">
         No active buffs.
       </div>
     );
@@ -47,21 +47,21 @@ export function BuffsPanel({ store, tick }: { store: SpawnStore; tick: number })
         return (
           <div
             key={`${b.spellId}-${i}`}
-            className="flex items-baseline gap-2 border-b border-neutral-900 px-2 py-0.5 last:border-b-0"
+            className="flex items-baseline gap-2 border-b border-border px-2 py-0.5 last:border-b-0"
           >
-            <span className="flex-1 truncate text-neutral-200" title={b.spellName || `Spell ${b.spellId}`}>
+            <span className="flex-1 truncate text-foreground" title={b.spellName || `Spell ${b.spellId}`}>
               {b.spellName || `(spell ${b.spellId})`}
             </span>
             <span
               className={
                 'shrink-0 font-mono text-[10px] tabular-nums ' +
                 (permanent
-                  ? 'text-neutral-500'
+                  ? 'text-muted-foreground'
                   : expiringSoon
-                  ? 'text-amber-300'
+                  ? 'text-amber-600 dark:text-amber-300'
                   : remaining <= 0
-                  ? 'text-red-400'
-                  : 'text-emerald-300')
+                  ? 'text-red-600 dark:text-red-400'
+                  : 'text-emerald-600 dark:text-emerald-300')
               }
             >
               {permanent ? '∞' : formatRemaining(remaining)}

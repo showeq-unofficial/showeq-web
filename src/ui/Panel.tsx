@@ -19,14 +19,14 @@ export function Panel({
   style?: CSSProperties;
 }) {
   return (
-    <section style={style} className={`flex min-h-0 flex-col border-b border-neutral-800 bg-bg-panel ${className}`}>
-      <header className="flex shrink-0 items-center justify-between border-b border-neutral-800 bg-bg-alt px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-neutral-300">
+    <section style={style} className={`flex min-h-0 flex-col border-b border-border bg-bg-panel ${className}`}>
+      <header className="flex shrink-0 items-center justify-between border-b border-border bg-bg-alt px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-foreground">
         <span>{title}</span>
         <button
           type="button"
           onClick={onClose}
           aria-label={`Hide ${title}`}
-          className="rounded px-1 text-neutral-400 hover:bg-bg-base hover:text-neutral-200"
+          className="rounded px-1 text-muted-foreground hover:bg-bg-base hover:text-foreground"
         >
           ×
         </button>

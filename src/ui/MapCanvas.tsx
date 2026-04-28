@@ -627,7 +627,7 @@ export function MapCanvas({
       <HoverTip store={store} hover={hover} />
       <div
         className={
-          'absolute right-2 top-2 rounded border border-neutral-800 bg-bg-panel/95 text-xs shadow-md backdrop-blur ' +
+          'absolute right-2 top-2 rounded border border-border bg-bg-panel/95 text-xs shadow-md backdrop-blur ' +
           (overlayCollapsed ? '' : 'min-w-[160px] p-2')
         }
       >
@@ -640,7 +640,7 @@ export function MapCanvas({
           <button
             type="button"
             onClick={() => setOverlayCollapsed((c) => !c)}
-            className="text-neutral-400 hover:text-neutral-200"
+            className="text-muted-foreground hover:text-foreground"
             title={overlayCollapsed ? 'Expand layers' : 'Collapse layers'}
             aria-label={overlayCollapsed ? 'Expand layers' : 'Collapse layers'}
           >
@@ -648,11 +648,11 @@ export function MapCanvas({
           </button>
           {!overlayCollapsed && (
             <>
-              <span className="flex-1 font-medium text-neutral-300">Layers</span>
+              <span className="flex-1 font-medium text-foreground">Layers</span>
               <button
                 type="button"
                 onClick={resetView}
-                className="rounded border border-neutral-700 bg-bg-alt px-1.5 py-0.5 text-[10px] text-neutral-300 hover:bg-bg-base"
+                className="rounded border border-border bg-bg-alt px-1.5 py-0.5 text-[10px] text-foreground hover:bg-bg-base"
                 title="Reset zoom + pan"
               >
                 reset view
@@ -662,7 +662,7 @@ export function MapCanvas({
         </div>
         {!overlayCollapsed && (
         <>
-        <label className="mb-2 flex items-center gap-1 text-[11px] text-neutral-400">
+        <label className="mb-2 flex items-center gap-1 text-[11px] text-muted-foreground">
           <span className="w-7 shrink-0">FOV</span>
           <input
             type="range"
@@ -675,19 +675,19 @@ export function MapCanvas({
           />
           <span className="w-8 shrink-0 text-right tabular-nums">{fovDistance}</span>
         </label>
-        <label className="mb-2 flex items-center gap-1 text-[11px] text-neutral-300">
-          <span className="w-7 shrink-0 text-neutral-400">FPS</span>
+        <label className="mb-2 flex items-center gap-1 text-[11px] text-foreground">
+          <span className="w-7 shrink-0 text-muted-foreground">FPS</span>
           <select
             value={fpsCap}
             onChange={(e) => setFpsCap(Number(e.target.value))}
-            className="flex-1 rounded border border-neutral-700 bg-bg-alt px-1 py-0.5 text-[11px] text-neutral-300"
+            className="flex-1 rounded border border-border bg-bg-alt px-1 py-0.5 text-[11px] text-foreground"
           >
             <option value={0}>uncap</option>
             <option value={30}>30</option>
             <option value={60}>60</option>
           </select>
         </label>
-        <label className="mb-2 flex cursor-pointer items-center gap-1 text-[11px] text-neutral-300">
+        <label className="mb-2 flex cursor-pointer items-center gap-1 text-[11px] text-foreground">
           <input
             type="checkbox"
             checked={showGrid}
@@ -697,14 +697,14 @@ export function MapCanvas({
           Grid
         </label>
         {availableLayers.length === 0 ? (
-          <div className="text-neutral-500">no map loaded</div>
+          <div className="text-muted-foreground">no map loaded</div>
         ) : (
           <>
             <div className="flex flex-col gap-0.5">
               {availableLayers.map((layer) => (
                 <label
                   key={layer}
-                  className="flex cursor-pointer items-center gap-1 text-[11px] text-neutral-300"
+                  className="flex cursor-pointer items-center gap-1 text-[11px] text-foreground"
                 >
                   <input
                     type="checkbox"
@@ -716,18 +716,18 @@ export function MapCanvas({
                 </label>
               ))}
             </div>
-            <div className="mt-1 flex gap-1 border-t border-neutral-800 pt-1">
+            <div className="mt-1 flex gap-1 border-t border-border pt-1">
               <button
                 type="button"
                 onClick={allOn}
-                className="flex-1 rounded border border-neutral-700 bg-bg-alt px-1 py-0.5 text-[10px] text-neutral-300 hover:bg-bg-base"
+                className="flex-1 rounded border border-border bg-bg-alt px-1 py-0.5 text-[10px] text-foreground hover:bg-bg-base"
               >
                 all
               </button>
               <button
                 type="button"
                 onClick={allOff}
-                className="flex-1 rounded border border-neutral-700 bg-bg-alt px-1 py-0.5 text-[10px] text-neutral-300 hover:bg-bg-base"
+                className="flex-1 rounded border border-border bg-bg-alt px-1 py-0.5 text-[10px] text-foreground hover:bg-bg-base"
               >
                 none
               </button>
@@ -763,15 +763,15 @@ function HoverTip({
   return (
     <div
       style={{ left: hover.screenX + 12, top: hover.screenY + 12 }}
-      className="pointer-events-none absolute z-10 max-w-[220px] rounded border border-neutral-700 bg-bg-panel/95 px-2 py-1 text-[11px] text-neutral-200 shadow-md backdrop-blur"
+      className="pointer-events-none absolute z-10 max-w-[220px] rounded border border-border bg-bg-panel/95 px-2 py-1 text-[11px] text-foreground shadow-md backdrop-blur"
     >
       <div className="truncate font-medium">{display}</div>
-      <div className="text-neutral-400">
+      <div className="text-muted-foreground">
         L{spawn.level || '?'}
         {hpPct != null ? ` · ${hpPct}% HP` : ''}
         {cls ? ` · ${cls}` : ''}
       </div>
-      <div className="tabular-nums text-neutral-500">
+      <div className="tabular-nums text-muted-foreground">
         {Math.round(spawn.pos?.x ?? 0)}, {Math.round(spawn.pos?.y ?? 0)},{' '}
         {Math.round(spawn.pos?.z ?? 0)}
       </div>
