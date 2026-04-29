@@ -83,7 +83,7 @@ export function StatsPanel({ store, tick }: { store: SpawnStore; tick: number })
 
       <Bar label="HP"   cur={s.hpCur}      max={s.hpMax}      color="bg-red-600" />
       <Bar label="Mana" cur={s.manaCur}    max={s.manaMax}    color="bg-blue-600" />
-      <Bar label="Stam" cur={s.staminaCur} max={s.staminaMax} color="bg-emerald-600" />
+      <Bar label="End"  cur={s.enduranceCur} max={s.enduranceMax} color="bg-yellow-500" />
 
       <div className="mx-2 my-1 border-t border-border" />
 
