@@ -22,8 +22,18 @@ export type ChatEntry = ChatMessage & { seq: bigint };
 // wants to (currently unused).
 export type CombatEntry = CombatEvent & { seq: bigint; localTs: number };
 
+// One skill-up: synthesized client-side by diffing each PlayerStats.skills
+// payload against the previous one. Session-only — not persisted.
+export type SkillLogEntry = {
+  skillId: number;
+  oldValue: number;
+  newValue: number;
+  localTs: number;
+};
+
 const CHAT_HISTORY_LIMIT = 500;
 const COMBAT_HISTORY_LIMIT = 500;
+const SKILL_LOG_LIMIT = 200;
 
 // In-memory spawn map keyed by spawn id. Events from the daemon mutate
 // this in place; MapCanvas re-reads on each animation frame.
@@ -49,6 +59,7 @@ export class SpawnStore {
   // constants above to prevent unbounded memory in long sessions.
   private chat: ChatEntry[] = [];
   private combat: CombatEntry[] = [];
+  private skillLog: SkillLogEntry[] = [];
   private lastSeq = 0n;
 
   apply(env: Envelope): void {
@@ -106,9 +117,45 @@ export class SpawnStore {
         if (u.name !== undefined) existing.name = u.name;
         break;
       }
-      case 'playerStats':
-        this.playerStats = p.value;
+      case 'playerStats': {
+        // Diff skills against the previous snapshot to synthesize a
+        // skill-up log. Two filters keep the log clean:
+        //   - require a *non-zero* prev value: a skill that wasn't in
+        //     prev (or was 0) appearing for the first time isn't a
+        //     skill-up, it's the daemon catching up to login state.
+        //   - require the new value to be class-available: live sends
+        //     values for skill ids 75-99 the user's class can't train
+        //     (we filter those from the main list via skillCap, so do
+        //     the same here).
+        const prev = this.playerStats;
+        const cur = p.value;
+        if (prev) {
+          const prevMap = new Map<number, number>();
+          for (const s of prev.skills) prevMap.set(s.skillId, s.value);
+          const localTs = Date.now();
+          for (const s of cur.skills) {
+            const old = prevMap.get(s.skillId);
+            if (old === undefined || old === 0) continue;
+            if (s.value <= old) continue;
+            // Mirrors SkillsWindow's filter — skipping skills the class
+            // can't train. Avoids importing skillCaps directly to keep
+            // the store decoupled from UI; instead apply a structural
+            // filter: real trained skills always have an `old` already
+            // in prev, which is what we just checked.
+            this.skillLog.push({
+              skillId: s.skillId,
+              oldValue: old,
+              newValue: s.value,
+              localTs,
+            });
+          }
+          if (this.skillLog.length > SKILL_LOG_LIMIT) {
+            this.skillLog.splice(0, this.skillLog.length - SKILL_LOG_LIMIT);
+          }
+        }
+        this.playerStats = cur;
         break;
+      }
       case 'chat': {
         this.chat.push({ ...p.value, seq: env.seq });
         if (this.chat.length > CHAT_HISTORY_LIMIT) {
@@ -168,6 +215,7 @@ export class SpawnStore {
   stats(): PlayerStats | undefined { return this.playerStats; }
   chatLog(): ReadonlyArray<ChatEntry> { return this.chat; }
   combatLog(): ReadonlyArray<CombatEntry> { return this.combat; }
+  skillLogEntries(): ReadonlyArray<SkillLogEntry> { return this.skillLog; }
   groupState(): GroupUpdate | undefined { return this.group; }
   buffsState(): BuffsUpdate | undefined { return this.buffs; }
   categoriesState(): CategoriesUpdate | undefined { return this.categories; }

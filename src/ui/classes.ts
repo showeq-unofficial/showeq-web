@@ -55,3 +55,15 @@ const CLASSES: Record<number, string> = {
 export function classNameOf(id: number): string {
   return CLASSES[id] ?? '';
 }
+
+// Pure-melee classes with no mana pool. GM variants share the parent
+// class' resource model. Bard has mana (used for songs).
+const NO_MANA_CLASSES: ReadonlySet<number> = new Set([
+  1,  7,  9,  16,                 // Warrior, Monk, Rogue, Berserker
+  20, 26, 28, 35,                 // GM variants of the same
+]);
+
+export function classHasMana(id: number): boolean {
+  if (id <= 0) return true;       // unknown -> show bar, fail open
+  return !NO_MANA_CLASSES.has(id);
+}

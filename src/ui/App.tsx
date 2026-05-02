@@ -22,7 +22,9 @@ import { ResizeHandle } from './ResizeHandle';
 import { SettingsModal } from './SettingsModal';
 import { SpawnList } from './SpawnList';
 import { SpawnPointList } from './SpawnPointList';
-import { StatsPanel } from './StatsPanel';
+import { PlayerPanel } from './PlayerPanel';
+import { SkillsWindow } from './SkillsWindow';
+import { StatsWindow } from './StatsWindow';
 import { VerticalResizeHandle } from './VerticalResizeHandle';
 
 type ConnStatus = 'disconnected' | 'connecting' | 'connected';
@@ -85,7 +87,7 @@ type PanelKey =
 const PANEL_DEFS: { key: PanelKey; label: string }[] = [
   { key: 'spawns',      label: 'Spawns'  },
   { key: 'spawnPoints', label: 'Points'  },
-  { key: 'stats',       label: 'Stats'   },
+  { key: 'stats',       label: 'Player'  },
   { key: 'buffs',       label: 'Buffs'   },
   { key: 'group',       label: 'Group'   },
   { key: 'chat',        label: 'Chat'    },
@@ -132,6 +134,8 @@ export function App() {
   const leftRailRef = useRef<HTMLDivElement | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [skillsOpen, setSkillsOpen] = useState(false);
+  const [statsWindowOpen, setStatsWindowOpen] = useState(false);
   const [selectOnCon, setSelectOnCon] = useState(() => localPrefs.selectOnConsider());
   const [selectOnTarget, setSelectOnTarget] = useState(() => localPrefs.selectOnTarget());
   const [deselectOnUntarget, setDeselectOnUntarget] = useState(() => localPrefs.deselectOnUntarget());
@@ -414,8 +418,13 @@ export function App() {
               style={{ width: `${railWidths.right}px` }}
             >
               {visibility.stats && (
-                <Panel title="Stats" onClose={() => hidePanel('stats')}>
-                  <StatsPanel store={store} tick={tick} />
+                <Panel title="Player" onClose={() => hidePanel('stats')}>
+                  <PlayerPanel
+                    store={store}
+                    tick={tick}
+                    onOpenSkills={() => setSkillsOpen(true)}
+                    onOpenStats={() => setStatsWindowOpen(true)}
+                  />
                 </Panel>
               )}
               {visibility.buffs && (
@@ -450,6 +459,20 @@ export function App() {
           </>
         )}
       </div>
+      {skillsOpen && (
+        <SkillsWindow
+          store={store}
+          tick={tick}
+          onClose={() => setSkillsOpen(false)}
+        />
+      )}
+      {statsWindowOpen && (
+        <StatsWindow
+          store={store}
+          tick={tick}
+          onClose={() => setStatsWindowOpen(false)}
+        />
+      )}
       <SettingsModal
         open={settingsOpen}
         title="Preferences"

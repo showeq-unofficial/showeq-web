@@ -1,5 +1,5 @@
 import type { SpawnStore } from '../state/store';
-import { classNameOf } from './classes';
+import { classHasMana, classNameOf } from './classes';
 
 function pct(cur: number, max: number): number {
   if (!max || max <= 0) return 0;
@@ -44,16 +44,29 @@ function Bar({
   );
 }
 
-function StatCell({ label, value }: { label: string; value: number }) {
+function PanelButton({ label, onClick }: { label: string; onClick: () => void }) {
   return (
-    <div className="flex items-baseline justify-between rounded bg-bg-base px-1.5 py-1 text-xs">
-      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</span>
-      <span className="font-mono text-foreground">{value || '—'}</span>
-    </div>
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded border border-border px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground hover:bg-bg-base hover:text-foreground"
+    >
+      {label}
+    </button>
   );
 }
 
-export function StatsPanel({ store, tick }: { store: SpawnStore; tick: number }) {
+export function PlayerPanel({
+  store,
+  tick,
+  onOpenSkills,
+  onOpenStats,
+}: {
+  store: SpawnStore;
+  tick: number;
+  onOpenSkills?: () => void;
+  onOpenStats?: () => void;
+}) {
   // tick is just a dependency so the panel re-reads after each store apply.
   void tick;
   const s = store.stats();
@@ -67,22 +80,28 @@ export function StatsPanel({ store, tick }: { store: SpawnStore; tick: number })
   }
 
   const className = classNameOf(s.class);
-  const headerLabel = s.name
-    ? `${s.name}`
-    : '(unknown)';
+  const headerLabel = s.name ? `${s.name}` : '(unknown)';
   const subLabel = s.level
     ? `Level ${s.level}${className ? ' ' + className : ''}`
     : className;
 
   return (
     <div className="flex flex-col gap-1 py-1">
-      <div className="px-2 pb-1 pt-0.5">
-        <div className="text-sm font-semibold text-foreground">{headerLabel}</div>
-        {subLabel && <div className="text-[11px] text-muted-foreground">{subLabel}</div>}
+      <div className="flex items-start justify-between gap-2 px-2 pb-1 pt-0.5">
+        <div className="min-w-0">
+          <div className="truncate text-sm font-semibold text-foreground">{headerLabel}</div>
+          {subLabel && <div className="text-[11px] text-muted-foreground">{subLabel}</div>}
+        </div>
+        <div className="flex shrink-0 gap-1">
+          {onOpenStats && <PanelButton label="Stats" onClick={onOpenStats} />}
+          {onOpenSkills && <PanelButton label="Skills" onClick={onOpenSkills} />}
+        </div>
       </div>
 
       <Bar label="HP"   cur={s.hpCur}      max={s.hpMax}      color="bg-red-600" />
-      <Bar label="Mana" cur={s.manaCur}    max={s.manaMax}    color="bg-blue-600" />
+      {classHasMana(s.class) && (
+        <Bar label="Mana" cur={s.manaCur} max={s.manaMax} color="bg-blue-600" />
+      )}
       <Bar label="End"  cur={s.enduranceCur} max={s.enduranceMax} color="bg-yellow-500" />
 
       <div className="mx-2 my-1 border-t border-border" />
@@ -101,18 +120,6 @@ export function StatsPanel({ store, tick }: { store: SpawnStore; tick: number })
         color="bg-purple-500"
         numericRight={s.aaExpMax > 0 ? `${pct(s.aaExpCur, s.aaExpMax).toFixed(1)}%` : '—'}
       />
-
-      <div className="mx-2 my-1 border-t border-border" />
-
-      <div className="grid grid-cols-2 gap-1 px-2 pb-2">
-        <StatCell label="STR" value={s.str} />
-        <StatCell label="STA" value={s.sta} />
-        <StatCell label="AGI" value={s.agi} />
-        <StatCell label="DEX" value={s.dex} />
-        <StatCell label="WIS" value={s.wis} />
-        <StatCell label="INT" value={s.int} />
-        <StatCell label="CHA" value={s.cha} />
-      </div>
     </div>
   );
 }
