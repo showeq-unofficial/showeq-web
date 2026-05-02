@@ -163,6 +163,7 @@ export function SpawnList({
     const pLevel = player?.level ?? 0;
     const out: Row[] = [];
     for (const s of store.all()) {
+      if (player && s.id === player.id) continue;
       if (s.type === SpawnType.DOOR || s.type === SpawnType.DROP) continue;
       if (hideFiltered && (s.filterFlags & FILTERED_BIT) !== 0) continue;
       if (categoryFilter >= 0 &&
@@ -187,6 +188,33 @@ export function SpawnList({
     }
     return out;
   }, [store, categoryFilter, hideFiltered, localTick]);
+
+  // Player row is rendered separately so it stays pinned at the top of
+  // the table regardless of sort and scroll position. HP comes from
+  // store.stats() — the player's spawn record carries raw HP against
+  // hpMax=100, which would render as "1245%" if used directly.
+  const playerRow = useMemo<Row | null>(() => {
+    void localTick;
+    const player = store.player();
+    const stats = store.stats();
+    if (!player) return null;
+    const hpCur = stats?.hpCur ?? 0;
+    const hpMax = stats?.hpMax ?? 0;
+    const hpPct = hpMax > 0 ? (hpCur / hpMax) * 100 : -1;
+    const lvl = stats?.level ?? player.level ?? 0;
+    const baseName = stats?.name || player.name || '(you)';
+    return {
+      id: player.id,
+      name: baseName,
+      level: lvl,
+      klass: stats?.class ?? player.class,
+      hpPct,
+      distance: 0,
+      conColor: conHex(conOf(lvl, lvl)),
+      filterFlags: player.filterFlags,
+      type: player.type,
+    };
+  }, [store, localTick]);
 
   const table = useReactTable({
     data: rows,
@@ -248,7 +276,6 @@ export function SpawnList({
       </div>
       <div className="flex items-center justify-between gap-2 border-b border-border px-2 py-1 text-[11px] text-muted-foreground">
         <span>{rows.length} spawn{rows.length === 1 ? '' : 's'}</span>
-        <span>player lvl {store.player()?.level ?? '–'}</span>
         <label
           className="flex items-center gap-1"
           title="Refresh rate in frames per minute (5 = every 12s, 60 = every 1s). Mirrors legacy showeq-c spawnlist2 FPM spinbox."
@@ -298,6 +325,47 @@ export function SpawnList({
             ))}
           </thead>
           <tbody>
+            {playerRow && (() => {
+              // position:sticky doesn't apply to <tr> in table layouts,
+              // so we sticky each <td>. Top offset ≈ thead row height
+              // (text-xs + py-1 ≈ 24px). Background must be fully
+              // opaque since rows scroll under this one.
+              const isSelected = playerRow.id === selectedId;
+              const stickyCell =
+                'sticky top-6 z-[1] px-1.5 py-0.5 align-middle ' +
+                (isSelected
+                  ? 'bg-blue-900/95'
+                  : 'bg-bg-alt');
+              return (
+                <tr
+                  onClick={() => onSelect(playerRow.id)}
+                  className="cursor-pointer font-semibold text-amber-200"
+                >
+                  <td className={stickyCell}>
+                    <span
+                      className="inline-block h-2.5 w-2.5 rounded-full ring-1 ring-border"
+                      style={{ background: playerRow.conColor }}
+                    />
+                  </td>
+                  <td className={stickyCell}>{playerRow.name}</td>
+                  <td className={stickyCell}>{playerRow.level}</td>
+                  <td className={stickyCell}>
+                    <span
+                      className="block truncate"
+                      title={classNameOf(playerRow.klass)}
+                    >
+                      {classNameOf(playerRow.klass)}
+                    </span>
+                  </td>
+                  <td className={stickyCell}>
+                    {playerRow.hpPct >= 0
+                      ? `${Math.round(playerRow.hpPct)}%`
+                      : '–'}
+                  </td>
+                  <td className={stickyCell}>–</td>
+                </tr>
+              );
+            })()}
             {table.getRowModel().rows.map((r) => {
               const isSelected = r.original.id === selectedId;
               const filterTint = rowTints
