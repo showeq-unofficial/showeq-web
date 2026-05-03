@@ -6,6 +6,7 @@ import {
   ListDevicesSchema,
   ReloadFiltersSchema,
   RemoveFilterRuleSchema,
+  RenameSpawnPointSchema,
   SaveFiltersSchema,
   SetPrefSchema,
   SubscribeSchema,
@@ -205,6 +206,22 @@ export class SeqClient {
     }
     const env = create(ClientEnvelopeSchema, {
       payload: { case: 'setPref', value: create(SetPrefSchema, { pref }) },
+    });
+    this.send(env);
+  }
+
+  // Assign a user-curated label to a spawn point. `key` is the
+  // SpawnPoint.key the daemon ships in its envelopes (decimal x|y|z).
+  // The daemon writes through to the zone's <zone>.sp file and
+  // broadcasts a SpawnPointUpdated to every connected client — no
+  // local optimistic update needed; the UI re-renders when the echo
+  // arrives. Empty `name` clears the label.
+  renameSpawnPoint(key: string, name: string): void {
+    const env = create(ClientEnvelopeSchema, {
+      payload: {
+        case: 'renameSpawnPoint',
+        value: create(RenameSpawnPointSchema, { key, name }),
+      },
     });
     this.send(env);
   }

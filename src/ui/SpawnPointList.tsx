@@ -8,6 +8,18 @@ import {
   type SortingState,
 } from '@tanstack/react-table';
 import type { SpawnStore } from '../state/store';
+import type { SeqClient } from '../net/client';
+
+// Mirrors showeq-c Spawn::cleanedName (spawn.cpp:834-839): strip ASCII
+// digits and turn underscores into spaces. EQ wire names look like
+// "a_Goblin_Warrior01" — the legacy spawn list applied this transform
+// to the Name column, but the spawn-point Last column shipped raw on
+// purpose so the operator could see the literal evidence and copy a
+// clean version into the Name dialog by hand. Two decades of UX taste
+// later, raw is just noise: every consumer wants "a Goblin Warrior".
+function cleanedName(s: string): string {
+  return s.replace(/[0-9]/g, '').replace(/_/g, ' ');
+}
 
 // Mirrors showeq-c spawnpointlist.cpp's column model: x/y/z, the
 // remaining time until the next pop, the user-assigned name (if any),
@@ -43,47 +55,62 @@ function fmtRemaining(s: number | null): string {
   return `${m}:${ss.toString().padStart(2, '0')}`;
 }
 
-const columns = [
-  columnHelper.accessor('x', { header: 'X', size: 60 }),
-  columnHelper.accessor('y', { header: 'Y', size: 60 }),
-  columnHelper.accessor('z', {
-    header: 'Z',
-    size: 60,
-    cell: (info) => info.getValue().toFixed(1),
-  }),
-  columnHelper.accessor('remainingS', {
-    header: 'Remaining',
-    size: 80,
-    cell: (info) => (
-      <span className="font-mono">{fmtRemaining(info.getValue())}</span>
-    ),
-    sortingFn: (a, b) => {
-      // null sorts last so unknown-cycle points settle at the bottom.
-      const av = a.original.remainingS;
-      const bv = b.original.remainingS;
-      if (av === null && bv === null) return 0;
-      if (av === null) return 1;
-      if (bv === null) return -1;
-      return av - bv;
-    },
-  }),
-  columnHelper.accessor('name', {
-    header: 'Name',
-    cell: (info) => info.getValue() || '—',
-  }),
-  columnHelper.accessor('last', {
-    header: 'Last',
-    cell: (info) => info.getValue() || '—',
-  }),
-  columnHelper.accessor('count', { header: 'Count', size: 60 }),
-];
+function buildColumns(onRename: (key: string, currentName: string, last: string) => void) {
+  return [
+    columnHelper.accessor('x', { header: 'X', size: 60 }),
+    columnHelper.accessor('y', { header: 'Y', size: 60 }),
+    columnHelper.accessor('z', {
+      header: 'Z',
+      size: 60,
+      cell: (info) => info.getValue().toFixed(1),
+    }),
+    columnHelper.accessor('remainingS', {
+      header: 'Remaining',
+      size: 80,
+      cell: (info) => (
+        <span className="font-mono">{fmtRemaining(info.getValue())}</span>
+      ),
+      sortingFn: (a, b) => {
+        // null sorts last so unknown-cycle points settle at the bottom.
+        const av = a.original.remainingS;
+        const bv = b.original.remainingS;
+        if (av === null && bv === null) return 0;
+        if (av === null) return 1;
+        if (bv === null) return -1;
+        return av - bv;
+      },
+    }),
+    columnHelper.accessor('name', {
+      header: 'Name',
+      cell: (info) => {
+        const row = info.row.original;
+        return (
+          <span
+            className="cursor-pointer underline-offset-2 hover:underline"
+            title="Double-click to rename"
+            onDoubleClick={() => onRename(row.key, row.name, row.last)}
+          >
+            {info.getValue() || '—'}
+          </span>
+        );
+      },
+    }),
+    columnHelper.accessor('last', {
+      header: 'Last',
+      cell: (info) => info.getValue() || '—',
+    }),
+    columnHelper.accessor('count', { header: 'Count', size: 60 }),
+  ];
+}
 
 export function SpawnPointList({
   store,
   tick,
+  client,
 }: {
   store: SpawnStore;
   tick: number;
+  client: SeqClient | null;
 }) {
   // Default sort matches showeq-c: ascending by remaining time so the
   // next-to-pop is at the top.
@@ -114,7 +141,9 @@ export function SpawnPointList({
         y: sp.y,
         z: sp.z,
         name: sp.name,
-        last: sp.last,
+        // Display the scrubbed form. Wire stays raw so other consumers
+        // (e.g. logging, debug tools) keep the literal evidence.
+        last: cleanedName(sp.last),
         count: sp.count,
         remainingS: remaining,
         age,
@@ -122,6 +151,24 @@ export function SpawnPointList({
       return row;
     });
   }, [store, tick]);
+
+  const columns = useMemo(
+    () =>
+      buildColumns((key, currentName, last) => {
+        if (!client) return;
+        // Seed with the existing label, falling back to the scrubbed
+        // last-spawn name so the operator gets a sensible default
+        // instead of the raw "a_Goblin_Warrior01" the legacy dialog
+        // pre-filled. Mirrors showeq-c spawnpointlist.cpp:307-322
+        // (def = sp->name(); if empty, def = sp->last()) but with the
+        // cleanup applied.
+        const seed = currentName || last;
+        const next = window.prompt('Spawn point name:', seed);
+        if (next === null) return; // user cancelled
+        client.renameSpawnPoint(key, next.trim());
+      }),
+    [client],
+  );
 
   const table = useReactTable({
     data: rows,

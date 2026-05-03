@@ -408,7 +408,11 @@ export function App() {
                       : { flex: '1 1 0%' }
                   }
                 >
-                  <SpawnPointList store={store} tick={tick} />
+                  <SpawnPointList
+                    store={store}
+                    tick={tick}
+                    client={clientRef.current}
+                  />
                 </Panel>
               )}
             </div>
