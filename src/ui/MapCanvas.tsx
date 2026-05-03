@@ -36,12 +36,16 @@ export function MapCanvas({
   selectedId,
   selectVersion,
   onSelect,
+  trackPlayer,
+  onTrackPlayerChange,
 }: {
   store: SpawnStore;
   tick: number;
   selectedId: number | null;
   selectVersion: number;
   onSelect: (id: number | null) => void;
+  trackPlayer: boolean;
+  onTrackPlayerChange: (v: boolean) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -101,7 +105,12 @@ export function MapCanvas({
   const [visibleLayers, setVisibleLayers] = useState<Set<number>>(new Set());
   const visibleLayersRef = useRef(visibleLayers);
   useEffect(() => { visibleLayersRef.current = visibleLayers; }, [visibleLayers]);
-  const [overlayCollapsed, setOverlayCollapsed] = useState(false);
+  const [overlayCollapsed, setOverlayCollapsed] = useState<boolean>(
+    () => localStorage.getItem('map.overlayCollapsed') === '1',
+  );
+  useEffect(() => {
+    localStorage.setItem('map.overlayCollapsed', overlayCollapsed ? '1' : '0');
+  }, [overlayCollapsed]);
   // Grid (mirrors showeq-c's MapData::paintGrid). Resolution in world
   // units — 500 matches mapcore.cpp:75. Default-on per the user request.
   const [showGrid, setShowGrid] = useState<boolean>(
@@ -113,6 +122,16 @@ export function MapCanvas({
     localStorage.setItem('map.showGrid', showGrid ? '1' : '0');
   }, [showGrid]);
   const GRID_RESOLUTION = 500;
+  // Track-player: when on, the render loop pins pan so the player sits at
+  // the canvas center. Manual drag-pan flips it off via the parent-owned
+  // setter so the user can look elsewhere without fighting the tracker.
+  // Mirrors showeq-c's tFollowPlayer (map.h:98).
+  const trackPlayerRef = useRef(trackPlayer);
+  useEffect(() => { trackPlayerRef.current = trackPlayer; }, [trackPlayer]);
+  const onTrackPlayerChangeRef = useRef(onTrackPlayerChange);
+  useEffect(() => {
+    onTrackPlayerChangeRef.current = onTrackPlayerChange;
+  }, [onTrackPlayerChange]);
   // Render-rate cap. 0 = uncapped (every rAF tick paints). Otherwise we
   // gate the actual draw on `now - lastPaint >= 1000 / cap`. rAF still
   // fires at vsync so the throttle skips paints rather than sleeping —
@@ -213,6 +232,9 @@ export function MapCanvas({
         const dy = e.clientY - downAt.clientY;
         if (!movedFar && dx * dx + dy * dy > DRAG_THRESHOLD * DRAG_THRESHOLD) {
           movedFar = true;
+          // Manual pan releases tracking so the user can look elsewhere
+          // without the next render snapping the view back.
+          if (trackPlayerRef.current) onTrackPlayerChangeRef.current(false);
         }
         if (movedFar) {
           panXRef.current = e.clientX - dragOrigin.x;
@@ -249,12 +271,19 @@ export function MapCanvas({
     const onMouseLeave = () => setHover(null);
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
-      const rect = canvas.getBoundingClientRect();
-      const cx = e.clientX - rect.left;
-      const cy = e.clientY - rect.top;
       const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
       const oldScale = viewScaleRef.current;
       const newScale = Math.max(0.1, Math.min(50, oldScale * factor));
+      // When tracking, pan is overridden every frame to pin the player —
+      // cursor-anchored zoom would just flicker before the tracker wins.
+      // Zoom around the player (already at canvas center) instead.
+      if (trackPlayerRef.current) {
+        viewScaleRef.current = newScale;
+        return;
+      }
+      const rect = canvas.getBoundingClientRect();
+      const cx = e.clientX - rect.left;
+      const cy = e.clientY - rect.top;
       // Keep the world point under the cursor stationary: shift pan by the
       // change in canvas-space distance from center after scaling.
       const centerX = rect.width / 2;
@@ -293,21 +322,28 @@ export function MapCanvas({
     // continuously, so this measures actual paint cadence (not just
     // state changes the way iced-miseru's cache-driven counter does).
     const fpsStats = { count: 0, lastReset: 0, fps: 0 };
-    let lastPaint = 0;
+    // Cumulative paint deadline. Resetting to `now` each paint aliases
+    // when the display refresh isn't a multiple of the cap — e.g. 90Hz
+    // + cap=60 drops to 45fps because two 11.11ms rAFs land before the
+    // 16.67ms gate opens, making every other paint slip a vsync.
+    // Accumulating the deadline keeps the cadence on the cap, not on
+    // whichever rAF first crossed the threshold.
+    let nextPaint = 0;
     const render = () => {
       const cap = fpsCapRef.current;
       if (cap > 0) {
         const now = performance.now();
         const interval = 1000 / cap;
-        // Subtract a half-millisecond slack so a vsync tick that lands
-        // a hair early still counts. Without this a 60Hz display +
-        // cap=60 drops every other frame because rAF fires at ~16.66ms
-        // intervals while the gate wants exactly 16.66ms+.
-        if (now - lastPaint < interval - 0.5) {
+        // 0.5ms slack so a vsync that lands a hair early still counts.
+        if (now < nextPaint - 0.5) {
           frame = requestAnimationFrame(render);
           return;
         }
-        lastPaint = now;
+        // First frame or fell more than one interval behind: resync to
+        // now. Otherwise advance by exactly `interval` to hold cadence.
+        nextPaint = nextPaint === 0 || now > nextPaint + interval
+          ? now + interval
+          : nextPaint + interval;
       }
       const dpr = window.devicePixelRatio || 1;
       const w = canvas.width / dpr;
@@ -357,6 +393,14 @@ export function MapCanvas({
           panYRef.current = (target.pos.y - ccy) * scale;
         }
         pendingCenterRef.current = null;
+      }
+
+      // Track-player: pin pan so the player stays at the canvas center.
+      // Wins over pendingCenter — clicking a far spawn while tracking
+      // bumps zoom (selection effect) but keeps the view on the player.
+      if (trackPlayerRef.current && player?.pos) {
+        panXRef.current = (player.pos.x - ccx) * scale;
+        panYRef.current = (player.pos.y - ccy) * scale;
       }
 
       const project = (x: number, y: number): [number, number] => [
@@ -434,7 +478,10 @@ export function MapCanvas({
 
       // Spawns.
       const selId = selectedIdRef.current;
-      const pLevel = player?.level ?? 0;
+      // Prefer PlayerStats.level over the Spawn record: the daemon never
+      // resends the player's Spawn after a ding, so Spawn.level is frozen
+      // at zone-in. PlayerStats.level is bumped on OP_LevelUpdate.
+      const pLevel = store.stats()?.level ?? player?.level ?? 0;
       // Rebuild hit-test list each frame; we add the player below.
       const hits: SpawnHit[] = [];
       let selectedScreen: { x: number; y: number } | null = null;
