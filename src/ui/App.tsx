@@ -23,6 +23,7 @@ import { SettingsModal } from './SettingsModal';
 import { SpawnList } from './SpawnList';
 import { SpawnPointList } from './SpawnPointList';
 import { PlayerPanel } from './PlayerPanel';
+import { LootWindow } from './LootWindow';
 import { SkillsWindow } from './SkillsWindow';
 import { StatsWindow } from './StatsWindow';
 import { VerticalResizeHandle } from './VerticalResizeHandle';
@@ -136,9 +137,11 @@ export function App() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [skillsOpen, setSkillsOpen] = useState(false);
   const [statsWindowOpen, setStatsWindowOpen] = useState(false);
+  const [lootOpen, setLootOpen] = useState(false);
   const [selectOnCon, setSelectOnCon] = useState(() => localPrefs.selectOnConsider());
   const [selectOnTarget, setSelectOnTarget] = useState(() => localPrefs.selectOnTarget());
   const [deselectOnUntarget, setDeselectOnUntarget] = useState(() => localPrefs.deselectOnUntarget());
+  const [trackPlayer, setTrackPlayer] = useState(() => localPrefs.trackPlayer());
   // Live SeqClient for panels that need to send mutations back to the
   // daemon (e.g. FilterRulesPanel). Refreshed each time the URL changes.
   const clientRef = useRef<SeqClient | null>(null);
@@ -154,6 +157,10 @@ export function App() {
   const updateDeselectOnUntarget = (v: boolean) => {
     setDeselectOnUntarget(v);
     localPrefs.setDeselectOnUntarget(v);
+  };
+  const updateTrackPlayer = (v: boolean) => {
+    setTrackPlayer(v);
+    localPrefs.setTrackPlayer(v);
   };
 
   useEffect(() => {
@@ -340,6 +347,13 @@ export function App() {
                 >
                   Deselect on untarget
                 </MenubarCheckboxItem>
+                <MenubarCheckboxItem
+                  checked={trackPlayer}
+                  onCheckedChange={updateTrackPlayer}
+                  onSelect={(e) => e.preventDefault()}
+                >
+                  Track player
+                </MenubarCheckboxItem>
               </MenubarContent>
             </MenubarMenu>
           </Menubar>
@@ -408,6 +422,8 @@ export function App() {
             selectedId={selectedId}
             selectVersion={selectVersion}
             onSelect={onSelect}
+            trackPlayer={trackPlayer}
+            onTrackPlayerChange={updateTrackPlayer}
           />
         </div>
         {showRightRail && (
@@ -424,6 +440,7 @@ export function App() {
                     tick={tick}
                     onOpenSkills={() => setSkillsOpen(true)}
                     onOpenStats={() => setStatsWindowOpen(true)}
+                    onOpenLoot={() => setLootOpen(true)}
                   />
                 </Panel>
               )}
@@ -471,6 +488,13 @@ export function App() {
           store={store}
           tick={tick}
           onClose={() => setStatsWindowOpen(false)}
+        />
+      )}
+      {lootOpen && (
+        <LootWindow
+          store={store}
+          tick={tick}
+          onClose={() => setLootOpen(false)}
         />
       )}
       <SettingsModal

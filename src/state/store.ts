@@ -31,9 +31,67 @@ export type SkillLogEntry = {
   localTs: number;
 };
 
+// One loot line synthesized from a chatColor === 286 (CC_User_Loot)
+// chat event. `looter` is the empty string for "You have looted a X"
+// (template 467) and the looter's name for group/raid lines like
+// "Foo has looted a X" (template 466). Both sides are tracked together
+// so the session window shows everything that dropped in your group.
+export type LootEntry = {
+  itemName: string;
+  looter: string;
+  localTs: number;
+};
+
+// Running coin total for the session. Synthesized from "You receive X
+// from the corpse" (template 12072) and "You receive X as your split"
+// (template 12071) chat lines. Reset by clearLootLog.
+export type MoneyTotals = {
+  platinum: number;
+  gold: number;
+  silver: number;
+  copper: number;
+};
+
+// One sample of the player's experience progress, used to compute a
+// rolling XP rate. We continuously map (level, expCur, expMax) onto a
+// single scalar `level + expCur/expMax` so a level-up adds exactly 1.0
+// of "progress" rather than discontinuously resetting expCur to 0.
+type ExpSample = {
+  ts: number;
+  level: number;
+  expCur: number;
+  expMax: number;
+};
+
 const CHAT_HISTORY_LIMIT = 500;
 const COMBAT_HISTORY_LIMIT = 500;
 const SKILL_LOG_LIMIT = 200;
+const LOOT_LOG_LIMIT = 1000;
+// CC_User_Loot from showeq-daemon-quarm/src/everquest.h. Loot lines from
+// the server arrive as OP_FormattedMessage with this colour.
+const CHAT_COLOR_LOOT = 286;
+// EQMacEmu string templates 466/467 — both wrapped with literal "--"
+// borders by the server's eqstr table. The "a " article is hardcoded.
+// Item name has been pre-stripped of \x12 link wrappers by the daemon.
+const LOOT_RX_YOU = /^--You have looted a (.+?)--$/;
+const LOOT_RX_OTHER = /^--(.+?) has looted a (.+?)--$/;
+// Templates 12071/12072. "%1" is `Strings::Money(...)` output, which
+// always starts with a leading space and uses Oxford-comma separators
+// — the regex below tolerates either by extracting the coin tokens
+// independently after a coarse boundary match.
+const MONEY_RX = /^You receive\s+(.+?)\s+(?:from the corpse|as your split)\.?$/;
+const MONEY_TOKEN_RX = /([\d,]+)\s+(platinum|gold|silver|copper)/g;
+// Window over which the XP rate is averaged. Long enough to stay stable
+// during travel/idle gaps between kills, short enough to reflect a
+// changed group/zone within a few minutes.
+const EXP_WINDOW_MS = 10 * 60 * 1000;
+// Minimum elapsed time before we trust a rate at all. Below this the
+// estimate is dominated by single-kill granularity, which is misleading
+// — one kill on a fresh page load would otherwise extrapolate to a wild
+// %/hr number. Three minutes is enough that a couple of kills are
+// already averaged together by the regression below.
+const EXP_MIN_ELAPSED_MS = 3 * 60 * 1000;
+const EXP_SAMPLE_LIMIT = 256;
 
 // In-memory spawn map keyed by spawn id. Events from the daemon mutate
 // this in place; MapCanvas re-reads on each animation frame.
@@ -60,6 +118,9 @@ export class SpawnStore {
   private chat: ChatEntry[] = [];
   private combat: CombatEntry[] = [];
   private skillLog: SkillLogEntry[] = [];
+  private lootLog: LootEntry[] = [];
+  private moneyTotals: MoneyTotals = { platinum: 0, gold: 0, silver: 0, copper: 0 };
+  private expSamples: ExpSample[] = [];
   private lastSeq = 0n;
 
   apply(env: Envelope): void {
@@ -154,6 +215,7 @@ export class SpawnStore {
           }
         }
         this.playerStats = cur;
+        this.recordExpSample(cur);
         break;
       }
       case 'chat': {
@@ -161,6 +223,7 @@ export class SpawnStore {
         if (this.chat.length > CHAT_HISTORY_LIMIT) {
           this.chat.splice(0, this.chat.length - CHAT_HISTORY_LIMIT);
         }
+        this.parseLootChat(p.value.text, p.value.chatColor);
         break;
       }
       case 'group':
@@ -216,6 +279,58 @@ export class SpawnStore {
   chatLog(): ReadonlyArray<ChatEntry> { return this.chat; }
   combatLog(): ReadonlyArray<CombatEntry> { return this.combat; }
   skillLogEntries(): ReadonlyArray<SkillLogEntry> { return this.skillLog; }
+  lootEntries(): ReadonlyArray<LootEntry> { return this.lootLog; }
+  moneyTotal(): MoneyTotals { return { ...this.moneyTotals }; }
+  clearLootLog(): void {
+    this.lootLog = [];
+    this.moneyTotals = { platinum: 0, gold: 0, silver: 0, copper: 0 };
+  }
+
+  private parseLootChat(text: string, chatColor: number): void {
+    if (chatColor === CHAT_COLOR_LOOT) {
+      const youMatch = LOOT_RX_YOU.exec(text);
+      if (youMatch) {
+        this.pushLoot({ itemName: youMatch[1], looter: '', localTs: Date.now() });
+        return;
+      }
+      const otherMatch = LOOT_RX_OTHER.exec(text);
+      if (otherMatch) {
+        this.pushLoot({ itemName: otherMatch[2], looter: otherMatch[1], localTs: Date.now() });
+        return;
+      }
+    }
+    // Money lines arrive as Chat::Green (chatColor 2), which is also
+    // used by many unrelated system messages — gate on the text shape
+    // alone instead of the colour.
+    const moneyMatch = MONEY_RX.exec(text);
+    if (moneyMatch) {
+      this.accrueMoney(moneyMatch[1]);
+    }
+  }
+
+  private pushLoot(entry: LootEntry): void {
+    this.lootLog.push(entry);
+    if (this.lootLog.length > LOOT_LOG_LIMIT) {
+      this.lootLog.splice(0, this.lootLog.length - LOOT_LOG_LIMIT);
+    }
+  }
+
+  private accrueMoney(coinPhrase: string): void {
+    // Re-create the iterator each call — the regex has the /g flag so
+    // its lastIndex would otherwise leak across invocations.
+    const rx = new RegExp(MONEY_TOKEN_RX.source, 'g');
+    let match: RegExpExecArray | null;
+    while ((match = rx.exec(coinPhrase)) !== null) {
+      const n = Number.parseInt(match[1].replace(/,/g, ''), 10);
+      if (!Number.isFinite(n) || n <= 0) continue;
+      switch (match[2]) {
+        case 'platinum': this.moneyTotals.platinum += n; break;
+        case 'gold':     this.moneyTotals.gold     += n; break;
+        case 'silver':   this.moneyTotals.silver   += n; break;
+        case 'copper':   this.moneyTotals.copper   += n; break;
+      }
+    }
+  }
   groupState(): GroupUpdate | undefined { return this.group; }
   buffsState(): BuffsUpdate | undefined { return this.buffs; }
   categoriesState(): CategoriesUpdate | undefined { return this.categories; }
@@ -224,6 +339,86 @@ export class SpawnStore {
     return this.prefs.get(`${section}.${key}`);
   }
   allPrefs(): ReadonlyMap<string, Pref> { return this.prefs; }
+
+  // Rolling XP rate over EXP_WINDOW_MS. Uses least-squares regression on
+  // every sample in the window plus a synthetic `(now, currentProgress)`
+  // point so that:
+  //   - a single kill doesn't dominate the slope (regression averages
+  //     across all in-window samples instead of using only endpoints);
+  //   - idle time after the last kill correctly drags the rate toward
+  //     zero (the synthetic now-point keeps moving forward at the same
+  //     progress value, flattening the regression line).
+  // Returns undefined until we've buffered EXP_MIN_ELAPSED_MS of data.
+  expRate(): { pctPerHour: number; msToLevel: number | null } | undefined {
+    const cur = this.playerStats;
+    if (!cur || cur.expMax <= 0) return undefined;
+    const now = Date.now();
+    const cutoff = now - EXP_WINDOW_MS;
+    while (this.expSamples.length > 0 && this.expSamples[0].ts < cutoff) {
+      this.expSamples.shift();
+    }
+    const oldest = this.expSamples[0];
+    if (!oldest || oldest.expMax <= 0) return undefined;
+    const elapsedMs = now - oldest.ts;
+    if (elapsedMs < EXP_MIN_ELAPSED_MS) return undefined;
+
+    // Regress (t_seconds_since_oldest, levelProgress). Coefficients are
+    // levels-per-second; convert to %/hr by *100 *3600 (each level = 100%).
+    const t0 = oldest.ts;
+    const curProgress = cur.level + cur.expCur / cur.expMax;
+    let n = 0, sumT = 0, sumP = 0, sumTP = 0, sumTT = 0;
+    const accumulate = (tMs: number, p: number) => {
+      const t = (tMs - t0) / 1000;
+      n++;
+      sumT += t;
+      sumP += p;
+      sumTP += t * p;
+      sumTT += t * t;
+    };
+    for (const s of this.expSamples) {
+      accumulate(s.ts, s.level + s.expCur / s.expMax);
+    }
+    accumulate(now, curProgress);
+    const denom = n * sumTT - sumT * sumT;
+    if (denom <= 0) return undefined;
+    const slopePerSec = (n * sumTP - sumT * sumP) / denom;
+    const pctPerHour = slopePerSec * 3600 * 100;
+
+    const remainingPct = (1 - cur.expCur / cur.expMax) * 100;
+    const msToLevel = pctPerHour > 0
+      ? (remainingPct / pctPerHour) * 3_600_000
+      : null;
+    return { pctPerHour, msToLevel };
+  }
+
+  private recordExpSample(cur: PlayerStats): void {
+    if (cur.expMax <= 0) return;
+    const last = this.expSamples[this.expSamples.length - 1];
+    // Skip pure-duplicate samples: PlayerStats is re-emitted on hp/mana
+    // changes too, so without this we'd flood the buffer between kills.
+    if (
+      last &&
+      last.level === cur.level &&
+      last.expCur === cur.expCur &&
+      last.expMax === cur.expMax
+    ) {
+      return;
+    }
+    const ts = Date.now();
+    this.expSamples.push({
+      ts,
+      level: cur.level,
+      expCur: cur.expCur,
+      expMax: cur.expMax,
+    });
+    const cutoff = ts - EXP_WINDOW_MS;
+    while (this.expSamples.length > 0 && this.expSamples[0].ts < cutoff) {
+      this.expSamples.shift();
+    }
+    if (this.expSamples.length > EXP_SAMPLE_LIMIT) {
+      this.expSamples.splice(0, this.expSamples.length - EXP_SAMPLE_LIMIT);
+    }
+  }
 
   // Quick membership check used by MapCanvas to highlight group members.
   isGroupSpawn(spawnId: number): boolean {
