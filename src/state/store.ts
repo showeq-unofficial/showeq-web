@@ -6,6 +6,8 @@ import type {
   Envelope,
   FilterRulesUpdate,
   GroupUpdate,
+  Item,
+  ItemCacheTotals,
   MapGeometry,
   PlayerStats,
   Pref,
@@ -113,6 +115,12 @@ export class SpawnStore {
   // Populated wholesale by PrefsSnapshot, then mutated incrementally by
   // PrefChanged.
   private prefs = new Map<string, Pref>();
+  // Mirror of the daemon's persistent itemId -> Item cache. v1 scope:
+  // contains every item ever observed via OP_ItemPacket (worn,
+  // inventory, bags, bank). Worn-only requires daemon-side decoding of
+  // OP_PlayerProfile worn-slot offsets, which is deferred.
+  private items = new Map<number, Item>();
+  private itemTotals: ItemCacheTotals | undefined;
   // Bounded ring buffers (oldest first). Growth capped at the *_LIMIT
   // constants above to prevent unbounded memory in long sessions.
   private chat: ChatEntry[] = [];
@@ -130,12 +138,15 @@ export class SpawnStore {
       case 'snapshot': {
         this.spawns.clear();
         this.spawnPoints.clear();
+        this.items.clear();
         this.zoneShort = p.value.zoneShort;
         this.zoneLong = p.value.zoneLong;
         this.playerId = p.value.playerId;
         this.geometry = p.value.geometry;
         for (const s of p.value.spawns) this.spawns.set(s.id, s);
         for (const sp of p.value.spawnPoints) this.spawnPoints.set(sp.key, sp);
+        for (const it of p.value.items) this.items.set(it.id, it);
+        this.itemTotals = p.value.itemTotals;
         break;
       }
       case 'zoneChanged':
@@ -156,6 +167,12 @@ export class SpawnStore {
         break;
       case 'spawnPointsCleared':
         this.spawnPoints.clear();
+        break;
+      case 'itemLearned':
+        if (p.value.item) this.items.set(p.value.item.id, p.value.item);
+        break;
+      case 'itemTotals':
+        this.itemTotals = p.value;
         break;
       case 'spawnAdded':
         if (p.value.spawn) this.spawns.set(p.value.spawn.id, p.value.spawn);
@@ -268,6 +285,8 @@ export class SpawnStore {
 
   all(): Spawn[] { return Array.from(this.spawns.values()); }
   allSpawnPoints(): SpawnPoint[] { return Array.from(this.spawnPoints.values()); }
+  allItems(): Item[] { return Array.from(this.items.values()); }
+  totals(): ItemCacheTotals | undefined { return this.itemTotals; }
   zone(): string { return this.zoneShort; }
   zoneLongName(): string { return this.zoneLong; }
   seq(): bigint { return this.lastSeq; }

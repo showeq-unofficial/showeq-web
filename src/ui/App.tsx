@@ -26,6 +26,7 @@ import { PlayerPanel } from './PlayerPanel';
 import { LootWindow } from './LootWindow';
 import { SkillsWindow } from './SkillsWindow';
 import { StatsWindow } from './StatsWindow';
+import { InventoryStatsPanel } from './InventoryStatsPanel';
 import { VerticalResizeHandle } from './VerticalResizeHandle';
 
 type ConnStatus = 'disconnected' | 'connecting' | 'connected';
@@ -137,6 +138,7 @@ export function App() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [skillsOpen, setSkillsOpen] = useState(false);
   const [statsWindowOpen, setStatsWindowOpen] = useState(false);
+  const [inventoryOpen, setInventoryOpen] = useState(false);
   const [lootOpen, setLootOpen] = useState(false);
   const [selectOnCon, setSelectOnCon] = useState(() => localPrefs.selectOnConsider());
   const [selectOnTarget, setSelectOnTarget] = useState(() => localPrefs.selectOnTarget());
@@ -445,6 +447,7 @@ export function App() {
                     onOpenSkills={() => setSkillsOpen(true)}
                     onOpenStats={() => setStatsWindowOpen(true)}
                     onOpenLoot={() => setLootOpen(true)}
+                    onOpenItems={() => setInventoryOpen(true)}
                   />
                 </Panel>
               )}
@@ -492,6 +495,13 @@ export function App() {
           store={store}
           tick={tick}
           onClose={() => setStatsWindowOpen(false)}
+        />
+      )}
+      {inventoryOpen && (
+        <InventoryStatsPanel
+          store={store}
+          tick={tick}
+          onClose={() => setInventoryOpen(false)}
         />
       )}
       {lootOpen && (
