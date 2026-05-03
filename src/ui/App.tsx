@@ -24,6 +24,7 @@ import { SpawnList } from './SpawnList';
 import { SpawnPointList } from './SpawnPointList';
 import { PlayerPanel } from './PlayerPanel';
 import { LootWindow } from './LootWindow';
+import { AAWindow } from './AAWindow';
 import { SkillsWindow } from './SkillsWindow';
 import { StatsWindow } from './StatsWindow';
 import { InventoryStatsPanel } from './InventoryStatsPanel';
@@ -137,6 +138,7 @@ export function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [skillsOpen, setSkillsOpen] = useState(false);
+  const [aaWindowOpen, setAAWindowOpen] = useState(false);
   const [statsWindowOpen, setStatsWindowOpen] = useState(false);
   const [inventoryOpen, setInventoryOpen] = useState(false);
   const [lootOpen, setLootOpen] = useState(false);
@@ -446,6 +448,7 @@ export function App() {
                     tick={tick}
                     onOpenSkills={() => setSkillsOpen(true)}
                     onOpenStats={() => setStatsWindowOpen(true)}
+                    onOpenAA={() => setAAWindowOpen(true)}
                     onOpenLoot={() => setLootOpen(true)}
                     onOpenItems={() => setInventoryOpen(true)}
                   />
@@ -488,6 +491,13 @@ export function App() {
           store={store}
           tick={tick}
           onClose={() => setSkillsOpen(false)}
+        />
+      )}
+      {aaWindowOpen && (
+        <AAWindow
+          store={store}
+          tick={tick}
+          onClose={() => setAAWindowOpen(false)}
         />
       )}
       {statsWindowOpen && (
