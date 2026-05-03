@@ -160,7 +160,11 @@ export function SpawnList({
     // `localTick` forces the row rebuild on the chosen FPM cadence.
     void localTick;
     const player = store.player();
-    const pLevel = player?.level ?? 0;
+    // Prefer PlayerStats.level over Spawn.level: the daemon updates
+    // PlayerStats on OP_LevelUpdate (via levelChanged → onPlayerStatsChanged)
+    // but never resends the player's Spawn record, so Spawn.level is frozen
+    // at zone-in and con colors would otherwise drift after a ding.
+    const pLevel = store.stats()?.level ?? player?.level ?? 0;
     const out: Row[] = [];
     for (const s of store.all()) {
       if (player && s.id === player.id) continue;
