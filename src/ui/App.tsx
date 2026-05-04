@@ -40,6 +40,7 @@ import { InventoryStatsPanel } from './InventoryStatsPanel';
 import { VerticalResizeHandle } from './VerticalResizeHandle';
 import { FloatingWindow } from './FloatingWindow';
 import { SnapZones, type SnapHint, type SnapSide } from './SnapZones';
+import { useLayoutStore, type PanelKey } from '../state/layoutStore';
 
 type ConnStatus = 'disconnected' | 'connecting' | 'connected';
 
@@ -54,50 +55,7 @@ const STATUS_BADGE: Record<ConnStatus, string> = {
 const DEFAULT_WS_SCHEME = window.location.protocol === 'https:' ? 'wss' : 'ws';
 const DEFAULT_URL = `${DEFAULT_WS_SCHEME}://localhost:9090`;
 const URL_STORAGE_KEY = 'showeq.daemonUrl';
-const PANEL_STORAGE_KEY = 'showeq.panels';
-const RAIL_WIDTH_STORAGE_KEY = 'showeq.railWidths';
-// Fraction (0..1) of the left rail's height given to the Spawns panel
-// when both Spawns and SpawnPoints are visible. The remainder goes to
-// the SpawnPoints panel below it. Persisted so the user's split
-// survives a reload.
-const LEFT_SPLIT_STORAGE_KEY = 'showeq.leftSplit';
-const DEFAULT_LEFT_SPLIT = 0.55;
-const LEFT_SPLIT_MIN = 0.15;
-const LEFT_SPLIT_MAX = 0.85;
 
-// Pixel constraints on rail widths. Center map gets the rest, with its
-// own min-w-[300px] so rails can't crush it down to a sliver.
-const RAIL_MIN = 200;
-const RAIL_MAX = 600;
-const DEFAULT_LEFT_WIDTH = 320;
-const DEFAULT_RIGHT_WIDTH = 320;
-
-type RailWidths = { left: number; right: number };
-
-function loadRailWidths(): RailWidths {
-  try {
-    const raw = localStorage.getItem(RAIL_WIDTH_STORAGE_KEY);
-    if (!raw) return { left: DEFAULT_LEFT_WIDTH, right: DEFAULT_RIGHT_WIDTH };
-    const parsed = JSON.parse(raw) as Partial<RailWidths>;
-    return {
-      left:  clampRail(parsed.left  ?? DEFAULT_LEFT_WIDTH),
-      right: clampRail(parsed.right ?? DEFAULT_RIGHT_WIDTH),
-    };
-  } catch {
-    return { left: DEFAULT_LEFT_WIDTH, right: DEFAULT_RIGHT_WIDTH };
-  }
-}
-
-function clampRail(w: number): number {
-  return Math.max(RAIL_MIN, Math.min(RAIL_MAX, w));
-}
-
-function clampSplit(s: number): number {
-  return Math.max(LEFT_SPLIT_MIN, Math.min(LEFT_SPLIT_MAX, s));
-}
-
-type PanelKey =
-  | 'spawns' | 'spawnPoints' | 'stats' | 'buffs' | 'group' | 'chat' | 'combat';
 const PANEL_DEFS: { key: PanelKey; label: string }[] = [
   { key: 'spawns',      label: 'Spawns'  },
   { key: 'spawnPoints', label: 'Points'  },
@@ -107,42 +65,6 @@ const PANEL_DEFS: { key: PanelKey; label: string }[] = [
   { key: 'chat',        label: 'Chat'    },
   { key: 'combat',      label: 'Combat'  },
 ];
-const DEFAULT_VISIBILITY: Record<PanelKey, boolean> = {
-  spawns:      true,
-  spawnPoints: true,
-  stats:       true,
-  buffs:       false,
-  group:       true,
-  chat:        true,
-  combat:      false,
-};
-
-function loadVisibility(): Record<PanelKey, boolean> {
-  try {
-    const raw = localStorage.getItem(PANEL_STORAGE_KEY);
-    if (!raw) return DEFAULT_VISIBILITY;
-    const parsed = JSON.parse(raw) as Partial<Record<PanelKey, boolean>>;
-    return { ...DEFAULT_VISIBILITY, ...parsed };
-  } catch {
-    return DEFAULT_VISIBILITY;
-  }
-}
-
-// Where each panel lives. 'left' / 'right' = docked in that rail in
-// PANEL_DEFS order; 'floating' = rendered as a FloatingWindow. The
-// MapCanvas is intentionally not a PanelKey — it is always docked
-// in the center.
-type DockLocation = 'left' | 'right' | 'floating';
-const DOCK_STORAGE_KEY = 'showeq.dockLocation';
-const DEFAULT_DOCK_LOCATION: Record<PanelKey, 'left' | 'right'> = {
-  spawns:      'left',
-  spawnPoints: 'left',
-  stats:       'right',
-  buffs:       'right',
-  group:       'right',
-  combat:      'right',
-  chat:        'right',
-};
 // Default sizes used when a panel is first detached — chosen to match
 // each panel's typical docked footprint so the in-place detach gesture
 // feels natural even before the user has resized.
@@ -173,62 +95,6 @@ const PANEL_TITLES: Record<PanelKey, string> = {
 const FLEX_GROW_PANELS = new Set<PanelKey>(['spawns', 'spawnPoints', 'combat', 'chat']);
 const SNAP_THRESHOLD_PX = 32;
 
-// Per-rail render order. Reordering is achieved by moving a key inside
-// its rail's array; cross-rail moves splice the key out of the source
-// rail and into the target rail at the chosen slot. Floating panels
-// remain in their *last-docked* rail's array so closing a floating
-// panel and re-toggling it via View doesn't lose its slot.
-const ORDER_STORAGE_KEY = 'showeq.panelOrder';
-const DEFAULT_PANEL_ORDER: Record<'left' | 'right', PanelKey[]> = {
-  left:  ['spawns', 'spawnPoints'],
-  right: ['stats', 'buffs', 'group', 'chat', 'combat'],
-};
-
-function loadDockLocation(): Record<PanelKey, DockLocation> {
-  try {
-    const raw = localStorage.getItem(DOCK_STORAGE_KEY);
-    if (!raw) return { ...DEFAULT_DOCK_LOCATION };
-    const parsed = JSON.parse(raw) as Partial<Record<PanelKey, DockLocation>>;
-    return { ...DEFAULT_DOCK_LOCATION, ...parsed };
-  } catch {
-    return { ...DEFAULT_DOCK_LOCATION };
-  }
-}
-
-function loadPanelOrder(): Record<'left' | 'right', PanelKey[]> {
-  try {
-    const raw = localStorage.getItem(ORDER_STORAGE_KEY);
-    if (!raw) return { left: [...DEFAULT_PANEL_ORDER.left], right: [...DEFAULT_PANEL_ORDER.right] };
-    const parsed = JSON.parse(raw) as Partial<Record<'left' | 'right', PanelKey[]>>;
-    // Ensure every key is present in exactly one rail; missing keys
-    // fall back to their default rail/slot.
-    const result: Record<'left' | 'right', PanelKey[]> = {
-      left:  Array.isArray(parsed.left)  ? parsed.left.filter(isPanelKey)  : [],
-      right: Array.isArray(parsed.right) ? parsed.right.filter(isPanelKey) : [],
-    };
-    const seen = new Set<PanelKey>([...result.left, ...result.right]);
-    for (const k of Object.keys(DEFAULT_DOCK_LOCATION) as PanelKey[]) {
-      if (!seen.has(k)) result[DEFAULT_DOCK_LOCATION[k]].push(k);
-    }
-    return result;
-  } catch {
-    return { left: [...DEFAULT_PANEL_ORDER.left], right: [...DEFAULT_PANEL_ORDER.right] };
-  }
-}
-
-function isPanelKey(v: unknown): v is PanelKey {
-  return typeof v === 'string' && v in DEFAULT_DOCK_LOCATION;
-}
-
-// Translate a viewport-space rect into the FloatingWindow position
-// system, which stores positions as an offset from the viewport's
-// CSS center. Used when a panel is detached "in place" — we seed the
-// floating window's pos so it spawns exactly where the docked panel was.
-function rectToCenterOffset(rect: { x: number; y: number; w: number; h: number }) {
-  const cx = rect.x + rect.w / 2;
-  const cy = rect.y + rect.h / 2;
-  return { x: cx - window.innerWidth / 2, y: cy - window.innerHeight / 2 };
-}
 
 export function App() {
   const store = useMemo(() => new SpawnStore(), []);
@@ -240,17 +106,28 @@ export function App() {
   const [tick, setTick] = useState(0);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [selectVersion, setSelectVersion] = useState(0);
-  const [visibility, setVisibility] = useState<Record<PanelKey, boolean>>(() => loadVisibility());
-  const [railWidths, setRailWidths] = useState<RailWidths>(() => loadRailWidths());
-  const [leftSplit, setLeftSplit] = useState<number>(() => {
-    const raw = localStorage.getItem(LEFT_SPLIT_STORAGE_KEY);
-    const parsed = raw ? Number(raw) : DEFAULT_LEFT_SPLIT;
-    return Number.isFinite(parsed) ? clampSplit(parsed) : DEFAULT_LEFT_SPLIT;
-  });
-  const leftRailRef = useRef<HTMLDivElement | null>(null);
+  // Panel layout state lives in the zustand store so unrelated
+  // re-renders (e.g. tick churn) don't have to thread its setters
+  // through every callback.
+  const visibility   = useLayoutStore((s) => s.visibility);
+  const dockLocation = useLayoutStore((s) => s.dockLocation);
+  const panelOrder   = useLayoutStore((s) => s.panelOrder);
+  const panelsLocked = useLayoutStore((s) => s.panelsLocked);
+  const railWidths   = useLayoutStore((s) => s.railWidths);
+  const leftSplit    = useLayoutStore((s) => s.leftSplit);
+  const togglePanel       = useLayoutStore((s) => s.togglePanel);
+  const hidePanel         = useLayoutStore((s) => s.hidePanel);
+  const setPanelsLocked   = useLayoutStore((s) => s.setPanelsLocked);
+  const setLeftRailWidth  = useLayoutStore((s) => s.setLeftRailWidth);
+  const setRightRailWidth = useLayoutStore((s) => s.setRightRailWidth);
+  const setLeftSplit      = useLayoutStore((s) => s.setLeftSplit);
+  const undock            = useLayoutStore((s) => s.undock);
+  const dockToSlot        = useLayoutStore((s) => s.dockToSlot);
+  const resetDockTo       = useLayoutStore((s) => s.resetDockTo);
+  const resetLayout       = useLayoutStore((s) => s.resetLayout);
+
+  const leftRailRef  = useRef<HTMLDivElement | null>(null);
   const rightRailRef = useRef<HTMLDivElement | null>(null);
-  const [dockLocation, setDockLocation] = useState<Record<PanelKey, DockLocation>>(() => loadDockLocation());
-  const [panelOrder, setPanelOrder] = useState<Record<'left' | 'right', PanelKey[]>>(() => loadPanelOrder());
   const [snapHint, setSnapHint] = useState<SnapHint | null>(null);
   // Which floating dock panel (if any) is currently being dragged.
   // Snap zones only appear during dock-panel drags; the 5 floating
@@ -269,11 +146,6 @@ export function App() {
   const [deselectOnUntarget, setDeselectOnUntarget] = useState(() => localPrefs.deselectOnUntarget());
   const [trackPlayer, setTrackPlayer] = useState(() => localPrefs.trackPlayer());
   const [smoothMovement, setSmoothMovement] = useState(() => localPrefs.smoothMovement());
-  const [panelsLocked, setPanelsLocked] = useState(() => localPrefs.panelsLocked());
-  const updatePanelsLocked = (v: boolean) => {
-    setPanelsLocked(v);
-    localPrefs.setPanelsLocked(v);
-  };
   // Live SeqClient for panels that need to send mutations back to the
   // daemon (e.g. FilterRulesPanel). Refreshed each time the URL changes.
   const clientRef = useRef<SeqClient | null>(null);
@@ -310,33 +182,6 @@ export function App() {
     return () => clearInterval(id);
   }, []);
 
-  useEffect(() => {
-    localStorage.setItem(PANEL_STORAGE_KEY, JSON.stringify(visibility));
-  }, [visibility]);
-
-  useEffect(() => {
-    localStorage.setItem(RAIL_WIDTH_STORAGE_KEY, JSON.stringify(railWidths));
-  }, [railWidths]);
-
-  useEffect(() => {
-    localStorage.setItem(LEFT_SPLIT_STORAGE_KEY, leftSplit.toString());
-  }, [leftSplit]);
-
-  useEffect(() => {
-    localStorage.setItem(DOCK_STORAGE_KEY, JSON.stringify(dockLocation));
-  }, [dockLocation]);
-
-  useEffect(() => {
-    localStorage.setItem(ORDER_STORAGE_KEY, JSON.stringify(panelOrder));
-  }, [panelOrder]);
-
-  const onLeftResize = useCallback((dx: number) => {
-    setRailWidths((w) => ({ ...w, left: clampRail(w.left + dx) }));
-  }, []);
-  const onRightResize = useCallback((dx: number) => {
-    // Right rail grows when you drag the handle leftward.
-    setRailWidths((w) => ({ ...w, right: clampRail(w.right - dx) }));
-  }, []);
   // Convert pixel-space drag delta into a fraction of the rail's
   // current height. Reading from the DOM avoids tracking a separate
   // resize observer for the rail container — its height is always
@@ -344,63 +189,8 @@ export function App() {
   const onLeftSplitResize = useCallback((dy: number) => {
     const h = leftRailRef.current?.clientHeight ?? 0;
     if (h <= 0) return;
-    setLeftSplit((s) => clampSplit(s + dy / h));
-  }, []);
-
-  const togglePanel = (key: PanelKey) =>
-    setVisibility((v) => ({ ...v, [key]: !v[key] }));
-  const hidePanel = (key: PanelKey) =>
-    setVisibility((v) => ({ ...v, [key]: false }));
-
-  // Detach a panel from its rail. If `anchor` is given (the panel's
-  // current bounding rect), seed the FloatingWindow's persisted pos and
-  // size so the floating instance appears in the same spot — gives the
-  // user a smooth "pop out in place" feel rather than a jump-to-center.
-  const undock = useCallback((key: PanelKey, anchor?: { x: number; y: number; w: number; h: number }) => {
-    if (anchor) {
-      const id = `panel.${key}`;
-      const offset = rectToCenterOffset(anchor);
-      try {
-        localStorage.setItem(`showeq.windowPos.${id}`, JSON.stringify(offset));
-        localStorage.setItem(`showeq.windowSize.${id}`, JSON.stringify({ w: anchor.w, h: anchor.h }));
-      } catch { /* storage full — fall back to default centered */ }
-    }
-    setDockLocation((d) => ({ ...d, [key]: 'floating' }));
-  }, []);
-
-  // Move `key` into rail `side` at `slot` (0 = top, omitted = end).
-  // Splices out of whichever rail's order array currently holds it,
-  // then inserts at the requested slot in the target rail.
-  const dockToSlot = useCallback((key: PanelKey, side: 'left' | 'right', slot?: number) => {
-    setPanelOrder((order) => {
-      const next: Record<'left' | 'right', PanelKey[]> = {
-        left:  order.left.filter((k) => k !== key),
-        right: order.right.filter((k) => k !== key),
-      };
-      const insertAt = slot === undefined ? next[side].length : Math.max(0, Math.min(next[side].length, slot));
-      next[side] = [...next[side].slice(0, insertAt), key, ...next[side].slice(insertAt)];
-      return next;
-    });
-    setDockLocation((d) => ({ ...d, [key]: side }));
-  }, []);
-  const resetDockTo = useCallback((key: PanelKey) => {
-    dockToSlot(key, DEFAULT_DOCK_LOCATION[key]);
-  }, [dockToSlot]);
-
-  const resetLayout = useCallback(() => {
-    setDockLocation({ ...DEFAULT_DOCK_LOCATION });
-    setPanelOrder({
-      left:  [...DEFAULT_PANEL_ORDER.left],
-      right: [...DEFAULT_PANEL_ORDER.right],
-    });
-    setRailWidths({ left: DEFAULT_LEFT_WIDTH, right: DEFAULT_RIGHT_WIDTH });
-    setLeftSplit(DEFAULT_LEFT_SPLIT);
-    for (const k of Object.keys(localStorage)) {
-      if (k.startsWith('showeq.windowPos.panel.') || k.startsWith('showeq.windowSize.panel.')) {
-        localStorage.removeItem(k);
-      }
-    }
-  }, []);
+    setLeftSplit((prev) => prev + dy / h);
+  }, [setLeftSplit]);
 
   // Snap-zone hit test. Edge proximity OR overlapping the actual rail
   // both count — the latter handles the case where a rail is currently
@@ -660,7 +450,7 @@ export function App() {
                 <MenubarSeparator />
                 <MenubarCheckboxItem
                   checked={panelsLocked}
-                  onCheckedChange={updatePanelsLocked}
+                  onCheckedChange={setPanelsLocked}
                   onSelect={(e) => e.preventDefault()}
                 >
                   Lock panels
@@ -760,7 +550,7 @@ export function App() {
                 return nodes;
               })}
             </div>
-            <ResizeHandle onDrag={onLeftResize} />
+            <ResizeHandle onDrag={setLeftRailWidth} />
           </>
         )}
         <div className="min-w-[300px] flex-1">
@@ -777,7 +567,7 @@ export function App() {
         </div>
         {showRightRail && (
           <>
-            <ResizeHandle onDrag={onRightResize} />
+            <ResizeHandle onDrag={setRightRailWidth} />
             <div
               ref={rightRailRef}
               className="flex shrink-0 flex-col"
