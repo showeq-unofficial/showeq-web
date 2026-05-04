@@ -17,7 +17,6 @@ import {
 } from '@/components/ui/tabs';
 import { ChatColorsPanel } from './ChatColorsPanel';
 import { SeqClient } from '../net/client';
-import { localPrefs } from '../state/localPrefs';
 import { SpawnStore } from '../state/store';
 import { BuffsPanel } from './BuffsPanel';
 import { ChatLog } from './ChatLog';
@@ -41,6 +40,7 @@ import { VerticalResizeHandle } from './VerticalResizeHandle';
 import { FloatingWindow } from './FloatingWindow';
 import { SnapZones, type SnapHint, type SnapSide } from './SnapZones';
 import { useLayoutStore, type PanelKey } from '../state/layoutStore';
+import { usePrefsStore } from '../state/prefsStore';
 
 type ConnStatus = 'disconnected' | 'connecting' | 'connected';
 
@@ -141,35 +141,19 @@ export function App() {
   const [statsWindowOpen, setStatsWindowOpen] = useState(false);
   const [inventoryOpen, setInventoryOpen] = useState(false);
   const [lootOpen, setLootOpen] = useState(false);
-  const [selectOnCon, setSelectOnCon] = useState(() => localPrefs.selectOnConsider());
-  const [selectOnTarget, setSelectOnTarget] = useState(() => localPrefs.selectOnTarget());
-  const [deselectOnUntarget, setDeselectOnUntarget] = useState(() => localPrefs.deselectOnUntarget());
-  const [trackPlayer, setTrackPlayer] = useState(() => localPrefs.trackPlayer());
-  const [smoothMovement, setSmoothMovement] = useState(() => localPrefs.smoothMovement());
+  const selectOnCon         = usePrefsStore((s) => s.selectOnConsider);
+  const selectOnTarget      = usePrefsStore((s) => s.selectOnTarget);
+  const deselectOnUntarget  = usePrefsStore((s) => s.deselectOnUntarget);
+  const trackPlayer         = usePrefsStore((s) => s.trackPlayer);
+  const smoothMovement      = usePrefsStore((s) => s.smoothMovement);
+  const updateSelectOnCon         = usePrefsStore((s) => s.setSelectOnConsider);
+  const updateSelectOnTarget      = usePrefsStore((s) => s.setSelectOnTarget);
+  const updateDeselectOnUntarget  = usePrefsStore((s) => s.setDeselectOnUntarget);
+  const updateTrackPlayer         = usePrefsStore((s) => s.setTrackPlayer);
+  const updateSmoothMovement      = usePrefsStore((s) => s.setSmoothMovement);
   // Live SeqClient for panels that need to send mutations back to the
   // daemon (e.g. FilterRulesPanel). Refreshed each time the URL changes.
   const clientRef = useRef<SeqClient | null>(null);
-
-  const updateSelectOnCon = (v: boolean) => {
-    setSelectOnCon(v);
-    localPrefs.setSelectOnConsider(v);
-  };
-  const updateSelectOnTarget = (v: boolean) => {
-    setSelectOnTarget(v);
-    localPrefs.setSelectOnTarget(v);
-  };
-  const updateDeselectOnUntarget = (v: boolean) => {
-    setDeselectOnUntarget(v);
-    localPrefs.setDeselectOnUntarget(v);
-  };
-  const updateTrackPlayer = (v: boolean) => {
-    setTrackPlayer(v);
-    localPrefs.setTrackPlayer(v);
-  };
-  const updateSmoothMovement = (v: boolean) => {
-    setSmoothMovement(v);
-    localPrefs.setSmoothMovement(v);
-  };
 
   useEffect(() => {
     // Coarse tick that drives re-render of panels reading from the
@@ -317,21 +301,21 @@ export function App() {
     clientRef.current = client;
     const detachEnv = client.onEnvelope((env) => store.apply(env));
     // Drive UI selection from /consider and target packets when the
-    // user opted in via PreferencesPanel. localPrefs reads from
-    // localStorage on each event so toggles take effect immediately —
-    // no need to re-subscribe when the user flips them.
+    // user opted in via PreferencesPanel.
     const detachSelect = client.onEnvelope((env) => {
       const p = env.payload;
       // Mirrors showeq-c interface.cpp:5035-5061: deselect-on-untarget
       // runs independently of select-on-target — clearing the target
       // can drop the current selection even with select-on-target off.
-      if (p.case === 'considered' && p.value.spawnId &&
-          localPrefs.selectOnConsider()) {
+      // Read the store directly inside the closure so the latest toggle
+      // value is used without re-subscribing on each change.
+      const prefs = usePrefsStore.getState();
+      if (p.case === 'considered' && p.value.spawnId && prefs.selectOnConsider) {
         onSelect(p.value.spawnId);
       } else if (p.case === 'targeted') {
         if (p.value.spawnId === 0) {
-          if (localPrefs.deselectOnUntarget()) onSelect(null);
-        } else if (localPrefs.selectOnTarget()) {
+          if (prefs.deselectOnUntarget) onSelect(null);
+        } else if (prefs.selectOnTarget) {
           onSelect(p.value.spawnId);
         }
       }
