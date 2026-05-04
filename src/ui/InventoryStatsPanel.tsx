@@ -1,6 +1,4 @@
-import { useRef, useState } from 'react';
-import Draggable, { type DraggableData, type DraggableEvent } from 'react-draggable';
-import { localPrefs } from '../state/localPrefs';
+import { FloatingWindow } from './FloatingWindow';
 import type { SpawnStore } from '../state/store';
 
 // Indices into Item.stats[] / ItemCacheTotals.stats[]; mirrors
@@ -59,41 +57,17 @@ export function InventoryStatsPanel({
   onClose: () => void;
 }) {
   void tick;
-  const nodeRef = useRef<HTMLDivElement>(null);
-  const [pos] = useState(() => localPrefs.windowPos('inventoryStats'));
-  const handleStop = (_e: DraggableEvent, data: DraggableData) => {
-    localPrefs.setWindowPos('inventoryStats', { x: data.x, y: data.y });
-  };
-
   const t = store.totals();
   const worn = store.wornItems();
 
   return (
-    <Draggable
-      nodeRef={nodeRef}
-      handle=".inv-drag-handle"
-      defaultPosition={pos}
-      onStop={handleStop}
+    <FloatingWindow
+      id="inventoryStats"
+      title="Inventory totals"
+      defaultSize={{ w: 340, h: 480 }}
+      onClose={onClose}
     >
-      <div
-        ref={nodeRef}
-        className="fixed left-1/2 top-1/2 z-50 flex w-80 -translate-x-1/2 -translate-y-1/2 flex-col rounded border border-border bg-bg-panel shadow-xl"
-      >
-        <div className="inv-drag-handle flex cursor-move items-center justify-between border-b border-border bg-bg-alt px-2 py-1">
-          <span className="text-xs font-semibold uppercase tracking-wide text-foreground">
-            Inventory totals
-          </span>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-bg-base hover:text-foreground"
-            aria-label="Close inventory stats panel"
-          >
-            ×
-          </button>
-        </div>
-
-        <div className="flex flex-col gap-2 p-2">
+        <div className="flex flex-1 flex-col gap-2 overflow-y-auto p-2">
           <div className="text-[10px] text-muted-foreground">
             Sums HP/mana/AC/stats across the player's currently equipped
             gear, tracked via the OP_ItemPacket wrapper's main_slot /
@@ -150,7 +124,6 @@ export function InventoryStatsPanel({
             </details>
           )}
         </div>
-      </div>
-    </Draggable>
+    </FloatingWindow>
   );
 }

@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type PointerEvent as ReactPointerEvent } from 'react';
+import { flushSync } from 'react-dom';
 import {
   Menubar,
   MenubarCheckboxItem,
   MenubarContent,
+  MenubarItem,
   MenubarMenu,
   MenubarSeparator,
   MenubarTrigger,
@@ -36,8 +38,16 @@ import { SkillsWindow } from './SkillsWindow';
 import { StatsWindow } from './StatsWindow';
 import { InventoryStatsPanel } from './InventoryStatsPanel';
 import { VerticalResizeHandle } from './VerticalResizeHandle';
+import { FloatingWindow } from './FloatingWindow';
+import { SnapZones, type SnapHint, type SnapSide } from './SnapZones';
 
 type ConnStatus = 'disconnected' | 'connecting' | 'connected';
+
+const STATUS_BADGE: Record<ConnStatus, string> = {
+  connected:    'bg-emerald-700 text-emerald-100',
+  connecting:   'bg-amber-700 text-amber-100',
+  disconnected: 'bg-red-800 text-red-100',
+};
 
 // Match the page's scheme so an https-hosted UI doesn't trip mixed-content.
 // Daemon is expected to run on the user's own machine, not the page origin.
@@ -86,12 +96,6 @@ function clampSplit(s: number): number {
   return Math.max(LEFT_SPLIT_MIN, Math.min(LEFT_SPLIT_MAX, s));
 }
 
-const STATUS_BADGE: Record<ConnStatus, string> = {
-  connected:    'bg-emerald-700 text-emerald-100',
-  connecting:   'bg-amber-700 text-amber-100',
-  disconnected: 'bg-red-800 text-red-100',
-};
-
 type PanelKey =
   | 'spawns' | 'spawnPoints' | 'stats' | 'buffs' | 'group' | 'chat' | 'combat';
 const PANEL_DEFS: { key: PanelKey; label: string }[] = [
@@ -124,6 +128,108 @@ function loadVisibility(): Record<PanelKey, boolean> {
   }
 }
 
+// Where each panel lives. 'left' / 'right' = docked in that rail in
+// PANEL_DEFS order; 'floating' = rendered as a FloatingWindow. The
+// MapCanvas is intentionally not a PanelKey — it is always docked
+// in the center.
+type DockLocation = 'left' | 'right' | 'floating';
+const DOCK_STORAGE_KEY = 'showeq.dockLocation';
+const DEFAULT_DOCK_LOCATION: Record<PanelKey, 'left' | 'right'> = {
+  spawns:      'left',
+  spawnPoints: 'left',
+  stats:       'right',
+  buffs:       'right',
+  group:       'right',
+  combat:      'right',
+  chat:        'right',
+};
+// Default sizes used when a panel is first detached — chosen to match
+// each panel's typical docked footprint so the in-place detach gesture
+// feels natural even before the user has resized.
+const PANEL_DEFAULT_SIZES: Record<PanelKey, { w: number; h: number }> = {
+  spawns:      { w: 380, h: 480 },
+  spawnPoints: { w: 380, h: 300 },
+  stats:       { w: 320, h: 320 },
+  buffs:       { w: 300, h: 240 },
+  group:       { w: 280, h: 200 },
+  combat:      { w: 380, h: 280 },
+  chat:        { w: 380, h: 320 },
+};
+// Title shown on detached panels — the View-menu label is too terse
+// (e.g. "Points") for a window header.
+const PANEL_TITLES: Record<PanelKey, string> = {
+  spawns:      'Spawns',
+  spawnPoints: 'Spawn Points',
+  stats:       'Player',
+  buffs:       'Buffs',
+  group:       'Group',
+  combat:      'Combat',
+  chat:        'Chat',
+};
+// Panels that prefer to fill remaining vertical space when docked, so
+// the rail's natural-height panels (Player/Buffs/Group) sit at the top
+// and these expand. Used for both rails when a panel of either type
+// gets docked there.
+const FLEX_GROW_PANELS = new Set<PanelKey>(['spawns', 'spawnPoints', 'combat', 'chat']);
+const SNAP_THRESHOLD_PX = 32;
+
+// Per-rail render order. Reordering is achieved by moving a key inside
+// its rail's array; cross-rail moves splice the key out of the source
+// rail and into the target rail at the chosen slot. Floating panels
+// remain in their *last-docked* rail's array so closing a floating
+// panel and re-toggling it via View doesn't lose its slot.
+const ORDER_STORAGE_KEY = 'showeq.panelOrder';
+const DEFAULT_PANEL_ORDER: Record<'left' | 'right', PanelKey[]> = {
+  left:  ['spawns', 'spawnPoints'],
+  right: ['stats', 'buffs', 'group', 'chat', 'combat'],
+};
+
+function loadDockLocation(): Record<PanelKey, DockLocation> {
+  try {
+    const raw = localStorage.getItem(DOCK_STORAGE_KEY);
+    if (!raw) return { ...DEFAULT_DOCK_LOCATION };
+    const parsed = JSON.parse(raw) as Partial<Record<PanelKey, DockLocation>>;
+    return { ...DEFAULT_DOCK_LOCATION, ...parsed };
+  } catch {
+    return { ...DEFAULT_DOCK_LOCATION };
+  }
+}
+
+function loadPanelOrder(): Record<'left' | 'right', PanelKey[]> {
+  try {
+    const raw = localStorage.getItem(ORDER_STORAGE_KEY);
+    if (!raw) return { left: [...DEFAULT_PANEL_ORDER.left], right: [...DEFAULT_PANEL_ORDER.right] };
+    const parsed = JSON.parse(raw) as Partial<Record<'left' | 'right', PanelKey[]>>;
+    // Ensure every key is present in exactly one rail; missing keys
+    // fall back to their default rail/slot.
+    const result: Record<'left' | 'right', PanelKey[]> = {
+      left:  Array.isArray(parsed.left)  ? parsed.left.filter(isPanelKey)  : [],
+      right: Array.isArray(parsed.right) ? parsed.right.filter(isPanelKey) : [],
+    };
+    const seen = new Set<PanelKey>([...result.left, ...result.right]);
+    for (const k of Object.keys(DEFAULT_DOCK_LOCATION) as PanelKey[]) {
+      if (!seen.has(k)) result[DEFAULT_DOCK_LOCATION[k]].push(k);
+    }
+    return result;
+  } catch {
+    return { left: [...DEFAULT_PANEL_ORDER.left], right: [...DEFAULT_PANEL_ORDER.right] };
+  }
+}
+
+function isPanelKey(v: unknown): v is PanelKey {
+  return typeof v === 'string' && v in DEFAULT_DOCK_LOCATION;
+}
+
+// Translate a viewport-space rect into the FloatingWindow position
+// system, which stores positions as an offset from the viewport's
+// CSS center. Used when a panel is detached "in place" — we seed the
+// floating window's pos so it spawns exactly where the docked panel was.
+function rectToCenterOffset(rect: { x: number; y: number; w: number; h: number }) {
+  const cx = rect.x + rect.w / 2;
+  const cy = rect.y + rect.h / 2;
+  return { x: cx - window.innerWidth / 2, y: cy - window.innerHeight / 2 };
+}
+
 export function App() {
   const store = useMemo(() => new SpawnStore(), []);
   const [status, setStatus] = useState<ConnStatus>('disconnected');
@@ -142,6 +248,15 @@ export function App() {
     return Number.isFinite(parsed) ? clampSplit(parsed) : DEFAULT_LEFT_SPLIT;
   });
   const leftRailRef = useRef<HTMLDivElement | null>(null);
+  const rightRailRef = useRef<HTMLDivElement | null>(null);
+  const [dockLocation, setDockLocation] = useState<Record<PanelKey, DockLocation>>(() => loadDockLocation());
+  const [panelOrder, setPanelOrder] = useState<Record<'left' | 'right', PanelKey[]>>(() => loadPanelOrder());
+  const [snapHint, setSnapHint] = useState<SnapHint | null>(null);
+  // Which floating dock panel (if any) is currently being dragged.
+  // Snap zones only appear during dock-panel drags; the 5 floating
+  // utility windows (Loot, Skills, AA, StatsWindow, Inventory) don't
+  // dock and don't pass these callbacks.
+  const dragKeyRef = useRef<PanelKey | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [skillsOpen, setSkillsOpen] = useState(false);
@@ -154,6 +269,11 @@ export function App() {
   const [deselectOnUntarget, setDeselectOnUntarget] = useState(() => localPrefs.deselectOnUntarget());
   const [trackPlayer, setTrackPlayer] = useState(() => localPrefs.trackPlayer());
   const [smoothMovement, setSmoothMovement] = useState(() => localPrefs.smoothMovement());
+  const [panelsLocked, setPanelsLocked] = useState(() => localPrefs.panelsLocked());
+  const updatePanelsLocked = (v: boolean) => {
+    setPanelsLocked(v);
+    localPrefs.setPanelsLocked(v);
+  };
   // Live SeqClient for panels that need to send mutations back to the
   // daemon (e.g. FilterRulesPanel). Refreshed each time the URL changes.
   const clientRef = useRef<SeqClient | null>(null);
@@ -202,6 +322,14 @@ export function App() {
     localStorage.setItem(LEFT_SPLIT_STORAGE_KEY, leftSplit.toString());
   }, [leftSplit]);
 
+  useEffect(() => {
+    localStorage.setItem(DOCK_STORAGE_KEY, JSON.stringify(dockLocation));
+  }, [dockLocation]);
+
+  useEffect(() => {
+    localStorage.setItem(ORDER_STORAGE_KEY, JSON.stringify(panelOrder));
+  }, [panelOrder]);
+
   const onLeftResize = useCallback((dx: number) => {
     setRailWidths((w) => ({ ...w, left: clampRail(w.left + dx) }));
   }, []);
@@ -223,6 +351,163 @@ export function App() {
     setVisibility((v) => ({ ...v, [key]: !v[key] }));
   const hidePanel = (key: PanelKey) =>
     setVisibility((v) => ({ ...v, [key]: false }));
+
+  // Detach a panel from its rail. If `anchor` is given (the panel's
+  // current bounding rect), seed the FloatingWindow's persisted pos and
+  // size so the floating instance appears in the same spot — gives the
+  // user a smooth "pop out in place" feel rather than a jump-to-center.
+  const undock = useCallback((key: PanelKey, anchor?: { x: number; y: number; w: number; h: number }) => {
+    if (anchor) {
+      const id = `panel.${key}`;
+      const offset = rectToCenterOffset(anchor);
+      try {
+        localStorage.setItem(`showeq.windowPos.${id}`, JSON.stringify(offset));
+        localStorage.setItem(`showeq.windowSize.${id}`, JSON.stringify({ w: anchor.w, h: anchor.h }));
+      } catch { /* storage full — fall back to default centered */ }
+    }
+    setDockLocation((d) => ({ ...d, [key]: 'floating' }));
+  }, []);
+
+  // Move `key` into rail `side` at `slot` (0 = top, omitted = end).
+  // Splices out of whichever rail's order array currently holds it,
+  // then inserts at the requested slot in the target rail.
+  const dockToSlot = useCallback((key: PanelKey, side: 'left' | 'right', slot?: number) => {
+    setPanelOrder((order) => {
+      const next: Record<'left' | 'right', PanelKey[]> = {
+        left:  order.left.filter((k) => k !== key),
+        right: order.right.filter((k) => k !== key),
+      };
+      const insertAt = slot === undefined ? next[side].length : Math.max(0, Math.min(next[side].length, slot));
+      next[side] = [...next[side].slice(0, insertAt), key, ...next[side].slice(insertAt)];
+      return next;
+    });
+    setDockLocation((d) => ({ ...d, [key]: side }));
+  }, []);
+  const resetDockTo = useCallback((key: PanelKey) => {
+    dockToSlot(key, DEFAULT_DOCK_LOCATION[key]);
+  }, [dockToSlot]);
+
+  const resetLayout = useCallback(() => {
+    setDockLocation({ ...DEFAULT_DOCK_LOCATION });
+    setPanelOrder({
+      left:  [...DEFAULT_PANEL_ORDER.left],
+      right: [...DEFAULT_PANEL_ORDER.right],
+    });
+    setRailWidths({ left: DEFAULT_LEFT_WIDTH, right: DEFAULT_RIGHT_WIDTH });
+    setLeftSplit(DEFAULT_LEFT_SPLIT);
+    for (const k of Object.keys(localStorage)) {
+      if (k.startsWith('showeq.windowPos.panel.') || k.startsWith('showeq.windowSize.panel.')) {
+        localStorage.removeItem(k);
+      }
+    }
+  }, []);
+
+  // Snap-zone hit test. Edge proximity OR overlapping the actual rail
+  // both count — the latter handles the case where a rail is currently
+  // collapsed (no panels left) and the user wants to drop a panel back
+  // onto the empty space where the rail would be. Returns the side AND
+  // the slot index where the panel will land based on the cursor's
+  // vertical position relative to the existing panels.
+  const hitTest = useCallback((rect: DOMRect): SnapHint | null => {
+    const vw = window.innerWidth;
+    let side: SnapSide | null = null;
+    if (rect.left  <= SNAP_THRESHOLD_PX)            side = 'left';
+    else if (rect.right >= vw - SNAP_THRESHOLD_PX)  side = 'right';
+    else {
+      const lr = leftRailRef.current?.getBoundingClientRect();
+      if (lr && rect.left <= lr.right + SNAP_THRESHOLD_PX && rect.left >= lr.left - SNAP_THRESHOLD_PX) {
+        side = 'left';
+      } else {
+        const rr = rightRailRef.current?.getBoundingClientRect();
+        if (rr && rect.right >= rr.left - SNAP_THRESHOLD_PX && rect.right <= rr.right + SNAP_THRESHOLD_PX) {
+          side = 'right';
+        }
+      }
+    }
+    if (!side) return null;
+    const railEl = side === 'left' ? leftRailRef.current : rightRailRef.current;
+    const cursorY = rect.top + rect.height / 2;
+    if (!railEl) return { side, slot: 0 };
+    const sections = [...railEl.querySelectorAll<HTMLElement>(':scope > section')];
+    let slot = sections.length;
+    for (let i = 0; i < sections.length; i++) {
+      const r = sections[i].getBoundingClientRect();
+      if (cursorY < r.top + r.height / 2) { slot = i; break; }
+    }
+    return { side, slot };
+  }, []);
+
+  const onFloatingDragStart = useCallback((key: PanelKey, rect: DOMRect) => {
+    dragKeyRef.current = key;
+    setSnapHint(hitTest(rect));
+  }, [hitTest]);
+  const onFloatingDrag = useCallback((rect: DOMRect) => {
+    setSnapHint(hitTest(rect));
+  }, [hitTest]);
+  const onFloatingDragEnd = useCallback((key: PanelKey, rect: DOMRect) => {
+    const z = hitTest(rect);
+    dragKeyRef.current = null;
+    setSnapHint(null);
+    if (z) dockToSlot(key, z.side, z.slot);
+  }, [dockToSlot, hitTest]);
+
+  // Drag-out gesture: detach when the user mouses down on the panel
+  // header and moves > 6 px. Buttons in the header (close/detach) are
+  // exempt so they still click normally. Once the threshold is crossed
+  // we flip dockLocation to 'floating', seeding the FloatingWindow's
+  // pos and size to the panel's current bounds so the pop-out appears
+  // in place. Then — critical for one-shot drag UX — we hand the drag
+  // off to the new FloatingWindow's react-draggable by synthesizing
+  // a mousedown on its drag handle at the current cursor position.
+  // Without that handoff the user has to release and re-click to start
+  // dragging the floated panel, which feels broken.
+  const makeHeaderDragHandler = (key: PanelKey) => (e: ReactPointerEvent<HTMLElement>) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('button')) return;
+    const header = e.currentTarget;
+    const panelEl = header.parentElement;
+    if (!panelEl) return;
+    const rect = panelEl.getBoundingClientRect();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const onMove = (ev: PointerEvent) => {
+      const dx = ev.clientX - startX;
+      const dy = ev.clientY - startY;
+      if (dx * dx + dy * dy < 36) return;
+      cleanup();
+      // flushSync renders the FloatingWindow synchronously so the
+      // synthetic mousedown fires in the same tick — no rAF gap during
+      // which the cursor would drift, which on small panels (e.g. Buffs)
+      // showed up as a visible jump when the drag picked up.
+      flushSync(() => {
+        undock(key, { x: rect.left, y: rect.top, w: rect.width, h: rect.height });
+      });
+      const fw = document.querySelector(`[data-fw-id="panel.${key}"] .fw-drag-handle`) as HTMLElement | null;
+      if (!fw) return;
+      fw.dispatchEvent(new MouseEvent('mousedown', {
+        bubbles: true, cancelable: true, view: window,
+        clientX: ev.clientX, clientY: ev.clientY, button: 0,
+      }));
+    };
+    const cleanup = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', cleanup);
+      window.removeEventListener('pointercancel', cleanup);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', cleanup);
+    window.addEventListener('pointercancel', cleanup);
+  };
+
+  // Explicit "↗" button: same as drag-out, but triggered by click.
+  // Reads the panel rect at click time so the floating window spawns
+  // exactly where the docked panel lived.
+  const makeDetachClickHandler = (key: PanelKey) => (e: React.MouseEvent<HTMLButtonElement>) => {
+    const panelEl = e.currentTarget.closest('section') as HTMLElement | null;
+    if (!panelEl) { undock(key); return; }
+    const r = panelEl.getBoundingClientRect();
+    undock(key, { x: r.left, y: r.top, w: r.width, h: r.height });
+  };
 
   const onSelect = (id: number | null) => {
     setSelectedId(id);
@@ -281,11 +566,51 @@ export function App() {
     };
   }, [store, url]);
 
-  const showLeftRail = visibility.spawns || visibility.spawnPoints;
-  const showRightRail =
-    visibility.stats || visibility.buffs   || visibility.group ||
-    visibility.chat  || visibility.combat;
-  const bothLeftPanels = visibility.spawns && visibility.spawnPoints;
+  // A panel only contributes to its rail when both visible AND docked
+  // there. Detached ('floating') panels are rendered separately below.
+  const isDocked = (k: PanelKey, side: 'left' | 'right') =>
+    visibility[k] && dockLocation[k] === side;
+  const leftPanels  = panelOrder.left.filter((k) => isDocked(k, 'left'));
+  const rightPanels = panelOrder.right.filter((k) => isDocked(k, 'right'));
+  const showLeftRail  = leftPanels.length > 0;
+  const showRightRail = rightPanels.length > 0;
+  // The Spawns/SpawnPoints split survives only as long as those are the
+  // only two left-rail panels — otherwise leftSplit isn't meaningful.
+  const useLeftSplit =
+    leftPanels.length === 2 &&
+    leftPanels.includes('spawns') &&
+    leftPanels.includes('spawnPoints');
+
+  // Body content for each panel, reused for docked + floating render.
+  // Co-located here so both branches stay in sync as panel props evolve.
+  const renderPanelBody = (key: PanelKey): ReactNode => {
+    switch (key) {
+      case 'spawns':
+        return <SpawnList store={store} selectedId={selectedId} onSelect={onSelect} />;
+      case 'spawnPoints':
+        return <SpawnPointList store={store} tick={tick} client={clientRef.current} />;
+      case 'stats':
+        return (
+          <PlayerPanel
+            store={store}
+            tick={tick}
+            onOpenSkills={() => setSkillsOpen(true)}
+            onOpenStats={() => setStatsWindowOpen(true)}
+            onOpenAA={() => setAAWindowOpen(true)}
+            onOpenLoot={() => setLootOpen(true)}
+            onOpenItems={() => setInventoryOpen(true)}
+          />
+        );
+      case 'buffs':
+        return <BuffsPanel store={store} tick={tick} />;
+      case 'group':
+        return <GroupPanel store={store} tick={tick} />;
+      case 'combat':
+        return <CombatLog store={store} tick={tick} />;
+      case 'chat':
+        return <ChatLog store={store} tick={tick} />;
+    }
+  };
 
   return (
     <main className="flex h-screen w-screen flex-col bg-bg-base text-foreground">
@@ -332,6 +657,15 @@ export function App() {
                     {p.label}
                   </MenubarCheckboxItem>
                 ))}
+                <MenubarSeparator />
+                <MenubarCheckboxItem
+                  checked={panelsLocked}
+                  onCheckedChange={updatePanelsLocked}
+                  onSelect={(e) => e.preventDefault()}
+                >
+                  Lock panels
+                </MenubarCheckboxItem>
+                <MenubarItem onClick={resetLayout}>Reset layout</MenubarItem>
               </MenubarContent>
             </MenubarMenu>
             <MenubarSeparator className="mx-0 my-0 h-auto w-px self-stretch" />
@@ -399,45 +733,32 @@ export function App() {
               className="flex shrink-0 flex-col"
               style={{ width: `${railWidths.left}px` }}
             >
-              {visibility.spawns && (
-                <Panel
-                  title="Spawns"
-                  onClose={() => hidePanel('spawns')}
-                  className="min-h-0"
-                  style={
-                    bothLeftPanels
-                      ? { flex: `${leftSplit} 1 0%` }
-                      : { flex: '1 1 0%' }
-                  }
-                >
-                  <SpawnList
-                    store={store}
-                    selectedId={selectedId}
-                    onSelect={onSelect}
-                  />
-                </Panel>
-              )}
-              {bothLeftPanels && (
-                <VerticalResizeHandle onDrag={onLeftSplitResize} />
-              )}
-              {visibility.spawnPoints && (
-                <Panel
-                  title="Spawn Points"
-                  onClose={() => hidePanel('spawnPoints')}
-                  className="min-h-0"
-                  style={
-                    bothLeftPanels
-                      ? { flex: `${1 - leftSplit} 1 0%` }
-                      : { flex: '1 1 0%' }
-                  }
-                >
-                  <SpawnPointList
-                    store={store}
-                    tick={tick}
-                    client={clientRef.current}
-                  />
-                </Panel>
-              )}
+              {leftPanels.flatMap((k) => {
+                const flexStyle = useLeftSplit
+                  ? { flex: `${k === 'spawns' ? leftSplit : 1 - leftSplit} 1 0%` }
+                  : FLEX_GROW_PANELS.has(k)
+                  ? { flex: '1 1 0%' }
+                  : undefined;
+                const nodes = [
+                  <Panel
+                    key={k}
+                    title={PANEL_TITLES[k]}
+                    onClose={() => hidePanel(k)}
+                    onDetach={panelsLocked ? undefined : makeDetachClickHandler(k)}
+                    onHeaderPointerDown={panelsLocked ? undefined : makeHeaderDragHandler(k)}
+                    className={FLEX_GROW_PANELS.has(k) || useLeftSplit ? 'min-h-0' : ''}
+                    style={flexStyle}
+                  >
+                    {renderPanelBody(k)}
+                  </Panel>,
+                ];
+                if (useLeftSplit && k === 'spawns') {
+                  nodes.push(
+                    <VerticalResizeHandle key={`${k}-split`} onDrag={onLeftSplitResize} />,
+                  );
+                }
+                return nodes;
+              })}
             </div>
             <ResizeHandle onDrag={onLeftResize} />
           </>
@@ -458,50 +779,22 @@ export function App() {
           <>
             <ResizeHandle onDrag={onRightResize} />
             <div
+              ref={rightRailRef}
               className="flex shrink-0 flex-col"
               style={{ width: `${railWidths.right}px` }}
             >
-              {visibility.stats && (
-                <Panel title="Player" onClose={() => hidePanel('stats')}>
-                  <PlayerPanel
-                    store={store}
-                    tick={tick}
-                    onOpenSkills={() => setSkillsOpen(true)}
-                    onOpenStats={() => setStatsWindowOpen(true)}
-                    onOpenAA={() => setAAWindowOpen(true)}
-                    onOpenLoot={() => setLootOpen(true)}
-                    onOpenItems={() => setInventoryOpen(true)}
-                  />
-                </Panel>
-              )}
-              {visibility.buffs && (
-                <Panel title="Buffs" onClose={() => hidePanel('buffs')}>
-                  <BuffsPanel store={store} tick={tick} />
-                </Panel>
-              )}
-              {visibility.group && (
-                <Panel title="Group" onClose={() => hidePanel('group')}>
-                  <GroupPanel store={store} tick={tick} />
-                </Panel>
-              )}
-              {visibility.combat && (
+              {rightPanels.map((k) => (
                 <Panel
-                  title="Combat"
-                  onClose={() => hidePanel('combat')}
-                  className="min-h-0 flex-1"
+                  key={k}
+                  title={PANEL_TITLES[k]}
+                  onClose={() => hidePanel(k)}
+                  onDetach={panelsLocked ? undefined : makeDetachClickHandler(k)}
+                  onHeaderPointerDown={panelsLocked ? undefined : makeHeaderDragHandler(k)}
+                  className={FLEX_GROW_PANELS.has(k) ? 'min-h-0 flex-1' : ''}
                 >
-                  <CombatLog store={store} tick={tick} />
+                  {renderPanelBody(k)}
                 </Panel>
-              )}
-              {visibility.chat && (
-                <Panel
-                  title="Chat"
-                  onClose={() => hidePanel('chat')}
-                  className="min-h-0 flex-1"
-                >
-                  <ChatLog store={store} tick={tick} />
-                </Panel>
-              )}
+              ))}
             </div>
           </>
         )}
@@ -539,6 +832,30 @@ export function App() {
           store={store}
           tick={tick}
           onClose={() => setLootOpen(false)}
+        />
+      )}
+      {(['spawns','spawnPoints','stats','buffs','group','combat','chat'] as PanelKey[])
+        .filter((k) => visibility[k] && dockLocation[k] === 'floating')
+        .map((k) => (
+          <FloatingWindow
+            key={k}
+            id={`panel.${k}`}
+            title={PANEL_TITLES[k]}
+            defaultSize={PANEL_DEFAULT_SIZES[k]}
+            onClose={() => hidePanel(k)}
+            onDock={panelsLocked ? undefined : () => resetDockTo(k)}
+            onDragStart={panelsLocked ? undefined : (r) => onFloatingDragStart(k, r)}
+            onDrag={panelsLocked ? undefined : onFloatingDrag}
+            onDragEnd={panelsLocked ? undefined : (r) => onFloatingDragEnd(k, r)}
+          >
+            {renderPanelBody(k)}
+          </FloatingWindow>
+        ))}
+      {snapHint !== null && (
+        <SnapZones
+          leftRailRef={leftRailRef}
+          rightRailRef={rightRailRef}
+          hint={snapHint}
         />
       )}
       <SettingsModal

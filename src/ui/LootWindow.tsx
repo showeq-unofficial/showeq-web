@@ -1,6 +1,4 @@
-import { useRef, useState } from 'react';
-import Draggable, { type DraggableData, type DraggableEvent } from 'react-draggable';
-import { localPrefs } from '../state/localPrefs';
+import { FloatingWindow } from './FloatingWindow';
 import type { MoneyTotals, SpawnStore } from '../state/store';
 
 function formatTime(ts: number): string {
@@ -40,11 +38,6 @@ export function LootWindow({
   onClose: () => void;
 }) {
   void tick;
-  const nodeRef = useRef<HTMLDivElement>(null);
-  const [pos] = useState(() => localPrefs.windowPos('loot'));
-  const handleStop = (_e: DraggableEvent, data: DraggableData) => {
-    localPrefs.setWindowPos('loot', { x: data.x, y: data.y });
-  };
   // Re-aggregating on every render is cheap (<= LOOT_LOG_LIMIT entries)
   // and avoids needing a separate cache invalidation when the user hits
   // Clear.
@@ -75,41 +68,23 @@ export function LootWindow({
   const recent = entries.slice(-5).reverse();
 
   return (
-    <Draggable
-      nodeRef={nodeRef}
-      handle=".loot-drag-handle"
-      defaultPosition={pos}
-      onStop={handleStop}
+    <FloatingWindow
+      id="loot"
+      title={`Loot · ${entries.length}`}
+      defaultSize={{ w: 320, h: 380 }}
+      onClose={onClose}
+      headerExtras={
+        <button
+          type="button"
+          onClick={() => store.clearLootLog()}
+          className="rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground hover:bg-bg-base hover:text-foreground"
+          title="Clear session loot"
+        >
+          Clear
+        </button>
+      }
     >
-      <div
-        ref={nodeRef}
-        className="fixed left-1/2 top-1/2 z-50 flex w-80 -translate-x-1/2 -translate-y-1/2 flex-col rounded border border-border bg-bg-panel shadow-xl"
-      >
-        <div className="loot-drag-handle flex cursor-move items-center justify-between border-b border-border bg-bg-alt px-2 py-1">
-          <span className="text-xs font-semibold uppercase tracking-wide text-foreground">
-            Loot · {entries.length}
-          </span>
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => store.clearLootLog()}
-              className="rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground hover:bg-bg-base hover:text-foreground"
-              title="Clear session loot"
-            >
-              Clear
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-bg-base hover:text-foreground"
-              aria-label="Close loot window"
-            >
-              ×
-            </button>
-          </div>
-        </div>
-
-        <div className="max-h-72 overflow-y-auto px-2 py-1">
+        <div className="flex-1 overflow-y-auto px-2 py-1">
           {rows.length === 0 ? (
             <div className="py-2 text-center text-xs text-muted-foreground">
               No loot yet this session
@@ -174,7 +149,6 @@ export function LootWindow({
             {formatMoney(money)}
           </span>
         </div>
-      </div>
-    </Draggable>
+    </FloatingWindow>
   );
 }

@@ -1,6 +1,4 @@
-import { useRef, useState } from 'react';
-import Draggable, { type DraggableData, type DraggableEvent } from 'react-draggable';
-import { localPrefs } from '../state/localPrefs';
+import { FloatingWindow } from './FloatingWindow';
 import type { SpawnStore } from '../state/store';
 import { findPrimarySpec, skillCap } from './skillCaps';
 import { skillNameOf } from './skills';
@@ -20,12 +18,6 @@ export function SkillsWindow({
   onClose: () => void;
 }) {
   void tick;
-  const nodeRef = useRef<HTMLDivElement>(null);
-  const [pos] = useState(() => localPrefs.windowPos('skills'));
-  const handleStop = (_e: DraggableEvent, data: DraggableData) => {
-    localPrefs.setWindowPos('skills', { x: data.x, y: data.y });
-  };
-
   const stats = store.stats();
   const skills = stats?.skills ?? [];
   const classId = stats?.class ?? 0;
@@ -47,31 +39,13 @@ export function SkillsWindow({
   const log = [...store.skillLogEntries()].reverse().slice(0, 5);
 
   return (
-    <Draggable
-      nodeRef={nodeRef}
-      handle=".skills-drag-handle"
-      defaultPosition={pos}
-      onStop={handleStop}
+    <FloatingWindow
+      id="skills"
+      title="Skills"
+      defaultSize={{ w: 300, h: 420 }}
+      onClose={onClose}
     >
-      <div
-        ref={nodeRef}
-        className="fixed left-1/2 top-1/2 z-50 flex w-72 -translate-x-1/2 -translate-y-1/2 flex-col rounded border border-border bg-bg-panel shadow-xl"
-      >
-        <div className="skills-drag-handle flex cursor-move items-center justify-between border-b border-border bg-bg-alt px-2 py-1">
-          <span className="text-xs font-semibold uppercase tracking-wide text-foreground">
-            Skills
-          </span>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-bg-base hover:text-foreground"
-            aria-label="Close skills window"
-          >
-            ×
-          </button>
-        </div>
-
-        <div className="max-h-64 overflow-y-auto px-2 py-1">
+        <div className="flex-1 overflow-y-auto px-2 py-1">
           {rows.length === 0 ? (
             <div className="py-2 text-center text-xs text-muted-foreground">
               No skills learned yet
@@ -116,7 +90,6 @@ export function SkillsWindow({
             )}
           </div>
         </div>
-      </div>
-    </Draggable>
+    </FloatingWindow>
   );
 }

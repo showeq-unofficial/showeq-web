@@ -7,6 +7,7 @@ const KEY_SELECT_ON_TARGET    = 'showeq.selectOnTarget';
 const KEY_DESELECT_ON_UNTARGET = 'showeq.deselectOnUntarget';
 const KEY_TRACK_PLAYER        = 'showeq.trackPlayer';
 const KEY_SMOOTH_MOVEMENT     = 'showeq.smoothMovement';
+const KEY_PANELS_LOCKED       = 'showeq.panelsLocked';
 
 function readBool(key: string, fallback: boolean): boolean {
   const raw = localStorage.getItem(key);
@@ -19,6 +20,7 @@ function writeBool(key: string, value: boolean): void {
 }
 
 export type WindowPos = { x: number; y: number };
+export type WindowSize = { w: number; h: number };
 
 function readPos(key: string): WindowPos {
   try {
@@ -37,6 +39,25 @@ function writePos(key: string, pos: WindowPos): void {
   } catch { /* ignore */ }
 }
 
+// Returns null when no size has been persisted, so the caller can fall
+// back to its component-supplied default rather than a zero-sized box.
+function readSize(key: string): WindowSize | null {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw) {
+      const v = JSON.parse(raw);
+      if (typeof v?.w === 'number' && typeof v?.h === 'number') return v;
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
+function writeSize(key: string, size: WindowSize): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(size));
+  } catch { /* ignore */ }
+}
+
 export const localPrefs = {
   selectOnConsider: () => readBool(KEY_SELECT_ON_CONSIDER, false),
   setSelectOnConsider: (v: boolean) => writeBool(KEY_SELECT_ON_CONSIDER, v),
@@ -48,10 +69,16 @@ export const localPrefs = {
   setTrackPlayer: (v: boolean) => writeBool(KEY_TRACK_PLAYER, v),
   smoothMovement: () => readBool(KEY_SMOOTH_MOVEMENT, true),
   setSmoothMovement: (v: boolean) => writeBool(KEY_SMOOTH_MOVEMENT, v),
+  panelsLocked: () => readBool(KEY_PANELS_LOCKED, false),
+  setPanelsLocked: (v: boolean) => writeBool(KEY_PANELS_LOCKED, v),
 
   // Floating-window positions are offsets from the window's CSS-centered
   // initial position (the {0,0} default keeps it centered on first open).
   windowPos: (id: string): WindowPos => readPos(`showeq.windowPos.${id}`),
   setWindowPos: (id: string, pos: WindowPos) =>
     writePos(`showeq.windowPos.${id}`, pos),
+  windowSize: (id: string): WindowSize | null =>
+    readSize(`showeq.windowSize.${id}`),
+  setWindowSize: (id: string, size: WindowSize) =>
+    writeSize(`showeq.windowSize.${id}`, size),
 };
