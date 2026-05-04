@@ -378,19 +378,19 @@ export function MapCanvas({
       const scale = baseScale * viewScaleRef.current;
       const ccx = (minX + maxX) / 2;
       const ccy = (minY + maxY) / 2;
-      // EQ map+spawn convention (matched against showeq-c/src/map.cpp's
-      // calcXOffsetI / calcYOffsetI): both x and y are inverted for screen
-      // space. loadSOEMap negates the file values into MapData; showeq-c's
-      // render pass negates again, which is what we mirror here. Without
-      // the X negation everything draws mirrored.
+      // Coords arrive in screen convention (+X right, +Y down) — the
+      // daemon pre-negates EQ runtime coords at proto serialization time
+      // (see showeq-daemon/src/protoencoder.cpp fillPos / fillMapGeometry,
+      // and the seq.v1 Pos message comment). Projection is identity on
+      // the coords; pan adds an additional screen-pixel offset.
       // Apply a pending center request (from a SpawnList click). We need
       // ccx/ccy/scale to be known before computing pan, hence handling it
       // here rather than in the selection effect.
       if (pendingCenterRef.current != null) {
         const target = spawns.find((s) => s.id === pendingCenterRef.current);
         if (target?.pos) {
-          panXRef.current = (target.pos.x - ccx) * scale;
-          panYRef.current = (target.pos.y - ccy) * scale;
+          panXRef.current = -(target.pos.x - ccx) * scale;
+          panYRef.current = -(target.pos.y - ccy) * scale;
         }
         pendingCenterRef.current = null;
       }
@@ -399,13 +399,13 @@ export function MapCanvas({
       // Wins over pendingCenter — clicking a far spawn while tracking
       // bumps zoom (selection effect) but keeps the view on the player.
       if (trackPlayerRef.current && player?.pos) {
-        panXRef.current = (player.pos.x - ccx) * scale;
-        panYRef.current = (player.pos.y - ccy) * scale;
+        panXRef.current = -(player.pos.x - ccx) * scale;
+        panYRef.current = -(player.pos.y - ccy) * scale;
       }
 
       const project = (x: number, y: number): [number, number] => [
-        w / 2 - (x - ccx) * scale + panXRef.current,
-        h / 2 - (y - ccy) * scale + panYRef.current,
+        w / 2 + (x - ccx) * scale + panXRef.current,
+        h / 2 + (y - ccy) * scale + panYRef.current,
       ];
 
       // Grid (underlay). Ports MapData::paintGrid (mapcore.cpp:1666):
@@ -419,11 +419,11 @@ export function MapCanvas({
         ctx.font = '10px system-ui';
         ctx.fillStyle = '#e1c819';
         // World-space bounds of the visible viewport. Inverting the
-        // project() transform: world_x = ccx + (w/2 - sx + panX) / scale.
-        const worldLeft   = ccx + (w / 2 - w + panXRef.current) / scale;
-        const worldRight  = ccx + (w / 2 - 0 + panXRef.current) / scale;
-        const worldTop    = ccy + (h / 2 - h + panYRef.current) / scale;
-        const worldBottom = ccy + (h / 2 - 0 + panYRef.current) / scale;
+        // Inverse of project(): world_x = ccx + (sx - w/2 - panX) / scale.
+        const worldLeft   = ccx + (0 - w / 2 - panXRef.current) / scale;
+        const worldRight  = ccx + (w - w / 2 - panXRef.current) / scale;
+        const worldTop    = ccy + (0 - h / 2 - panYRef.current) / scale;
+        const worldBottom = ccy + (h - h / 2 - panYRef.current) / scale;
         // Project flips both axes (see calcXOffsetI mirror), so worldLeft
         // is actually the larger world-x. Normalize.
         const wxMin = Math.min(worldLeft, worldRight);
