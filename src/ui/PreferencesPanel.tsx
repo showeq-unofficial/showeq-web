@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { create } from '@bufbuild/protobuf';
 import {
   NetworkDeviceSchema,
@@ -6,6 +6,17 @@ import {
 } from '@gen/seq/v1/events_pb';
 import type { SeqClient } from '../net/client';
 import type { SpawnStore } from '../state/store';
+import {
+  MODE_OPTIONS,
+  THEME_OPTIONS,
+  getMode,
+  getTheme,
+  setMode,
+  setTheme,
+  subscribe as subscribeTheme,
+  type Mode,
+  type Theme,
+} from '../state/theme';
 
 // Preferences tab body. Daemon-side prefs flow through PrefsBroker:
 // each editor reads the current value from the store, lets the user
@@ -25,6 +36,14 @@ export function PreferencesPanel({
   tick: number;
 }) {
   void tick;
+
+  // Theme + mode are browser-local — they live in localStorage and the
+  // <html> data-attributes, not in daemon prefs. useSyncExternalStore
+  // keeps the dropdowns in sync if another component (or a future
+  // global hotkey) mutates them.
+  const mode = useSyncExternalStore(subscribeTheme, getMode);
+  const themeName = useSyncExternalStore(subscribeTheme, getTheme);
+
   const dtf = store.pref('Interface', 'DateTimeFormat');
   const dtfCurrent =
     dtf?.value.case === 'stringValue' ? dtf.value.value : '';
@@ -100,6 +119,41 @@ export function PreferencesPanel({
 
   return (
     <div className="flex flex-col gap-4 px-4 py-4 text-xs">
+      <section className="flex flex-col gap-2">
+        <label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+          Appearance
+        </label>
+        <label className="flex items-center gap-2">
+          <span className="w-20 text-foreground">Mode</span>
+          <select
+            value={mode}
+            onChange={(e) => setMode(e.target.value as Mode)}
+            className="flex-1 rounded border border-border bg-bg-base px-2 py-1 font-mono text-[11px] text-foreground focus:border-blue-500 focus:outline-none"
+          >
+            {MODE_OPTIONS.map((m) => (
+              <option key={m} value={m}>
+                {m === 'system' ? 'System (follow OS)' : m[0].toUpperCase() + m.slice(1)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex items-center gap-2">
+          <span className="w-20 text-foreground">Theme</span>
+          <select
+            value={themeName}
+            onChange={(e) => setTheme(e.target.value as Theme)}
+            className="flex-1 rounded border border-border bg-bg-base px-2 py-1 font-mono text-[11px] text-foreground focus:border-blue-500 focus:outline-none"
+          >
+            {THEME_OPTIONS.map((t) => (
+              <option key={t.value} value={t.value}>{t.label}</option>
+            ))}
+          </select>
+        </label>
+        <p className="text-muted-foreground">
+          Saved per browser. <code className="text-muted-foreground">System</code>
+          {' '}follows your OS preference and updates live.
+        </p>
+      </section>
       <section className="flex flex-col gap-2">
         <label className="text-[11px] uppercase tracking-wide text-muted-foreground">
           Capture

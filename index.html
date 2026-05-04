@@ -7,6 +7,28 @@
          picked innocuous label, so a window-title scan from the EQ client
          won't see "ShowEQ" or anything else identifying. -->
     <title>Dashboard</title>
+    <script>
+      // Resolve saved theme + mode synchronously so the first paint
+      // matches the user's choice (no flash). Mirrors src/state/theme.ts;
+      // keep them in sync if the storage keys or values ever change.
+      (function () {
+        try {
+          var mode = localStorage.getItem('showeq.theme.mode');
+          if (mode !== 'light' && mode !== 'dark') mode = 'system';
+          var theme = localStorage.getItem('showeq.theme.name');
+          if (theme !== 'shadui') theme = 'default';
+          var resolved = mode;
+          if (mode === 'system') {
+            resolved = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          }
+          document.documentElement.dataset.mode = resolved;
+          document.documentElement.dataset.theme = theme;
+        } catch (_) {
+          document.documentElement.dataset.mode = 'dark';
+          document.documentElement.dataset.theme = 'default';
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

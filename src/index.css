@@ -1,6 +1,12 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* Honor a manual data-mode override on <html> instead of relying on
+   prefers-color-scheme alone — the theme bootstrap in index.html sets
+   data-mode/data-theme before paint based on the user's saved choice
+   (or the OS preference when mode=system). */
+@custom-variant dark (&:where([data-mode="dark"], [data-mode="dark"] *));
+
 @theme {
   --color-bg-base: #0a0e12;
   --color-bg-panel: #111820;
@@ -33,65 +39,117 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
-/* shadcn theme tokens. Dark is the default; the prefers-color-scheme
-   media query below overrides for light. Tokens map to the app's
-   blueish-dark palette so shadcn components (menubar, dropdown, dialog,
-   …) inherit our look without per-instance className overrides.
-   Note: many panels still use hardcoded `text-neutral-*` / `border-neutral-*`
-   utilities and won't fully invert in light mode until those migrate to
-   semantic tokens. PR 1 is the plumbing; PR 2 is the audit pass. */
-:root {
-  color-scheme: light dark;
+/* Default palette — the app's blueish tinted neutrals. The :root
+   selector (no attributes) is the pre-bootstrap fallback and matches
+   default-dark; subsequent attribute-scoped rules override per-theme.
+   Many panels still use hardcoded `text-neutral-*` / `border-neutral-*`
+   utilities and won't fully invert in light mode until those migrate
+   to semantic tokens. */
+:root,
+:root[data-theme="default"][data-mode="dark"] {
+  color-scheme: dark;
   --radius: 0.375rem;
-  --background: #0a0e12;          /* = --color-bg-base */
+  --color-bg-base: #0a0e12;
+  --color-bg-panel: #111820;
+  --color-bg-alt: #182230;
+  --background: #0a0e12;
   --foreground: #e5e7eb;
-  --card: #111820;                /* = --color-bg-panel */
+  --card: #111820;
   --card-foreground: #e5e7eb;
-  --popover: #182230;             /* = --color-bg-alt — floats above panels */
+  --popover: #182230;             /* one step brighter than panel */
   --popover-foreground: #e5e7eb;
-  --primary: #1d4ed8;             /* blue-700, matches the old active-toggle color */
+  --primary: #1d4ed8;             /* blue-700 */
   --primary-foreground: #ffffff;
   --secondary: #1f2937;
   --secondary-foreground: #e5e7eb;
   --muted: #1f2937;
-  --muted-foreground: #9ca3af;    /* neutral-400 */
-  --accent: #243047;              /* one step brighter than popover, for hover */
+  --muted-foreground: #9ca3af;
+  --accent: #243047;
   --accent-foreground: #f3f4f6;
   --destructive: #b91c1c;
   --destructive-foreground: #ffffff;
-  --border: #262626;              /* neutral-800 */
-  --input: #404040;               /* neutral-700 */
-  --ring: #2563eb;                /* blue-600 */
+  --border: #262626;
+  --input: #404040;
+  --ring: #2563eb;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    /* Surfaces sit at gray-100 (~95% brightness); headers/popovers float
-       one notch lighter at gray-50; borders/hover use gray-200 for contrast
-       against gray-100. */
-    --color-bg-base: #f3f4f6;      /* gray-100 — page bg */
-    --color-bg-panel: #f3f4f6;     /* same as base — panels delineated by border */
-    --color-bg-alt: #f9fafb;       /* gray-50 — panel headers / floats above */
-    --background: #f3f4f6;
-    --foreground: #111827;         /* gray-900 */
-    --card: #f3f4f6;
-    --card-foreground: #111827;
-    --popover: #f9fafb;            /* gray-50 — floats brighter than panels */
-    --popover-foreground: #111827;
-    --primary: #1d4ed8;            /* blue-700, kept across themes */
-    --primary-foreground: #ffffff;
-    --secondary: #f9fafb;
-    --secondary-foreground: #111827;
-    --muted: #f9fafb;
-    --muted-foreground: #6b7280;   /* gray-500 */
-    --accent: #e5e7eb;             /* gray-200 — hover, darker than panel */
-    --accent-foreground: #111827;
-    --destructive: #b91c1c;
-    --destructive-foreground: #ffffff;
-    --border: #e5e7eb;             /* gray-200 — visible against gray-100 panels */
-    --input: #d1d5db;              /* gray-300 — input borders pop */
-    --ring: #2563eb;
-  }
+:root[data-theme="default"][data-mode="light"] {
+  color-scheme: light;
+  --color-bg-base: #f3f4f6;       /* gray-100 — page bg */
+  --color-bg-panel: #f3f4f6;      /* same as base — panels delineated by border */
+  --color-bg-alt: #f9fafb;        /* gray-50 — panel headers / floats above */
+  --background: #f3f4f6;
+  --foreground: #111827;
+  --card: #f3f4f6;
+  --card-foreground: #111827;
+  --popover: #f9fafb;
+  --popover-foreground: #111827;
+  --primary: #1d4ed8;
+  --primary-foreground: #ffffff;
+  --secondary: #f9fafb;
+  --secondary-foreground: #111827;
+  --muted: #f9fafb;
+  --muted-foreground: #6b7280;
+  --accent: #e5e7eb;
+  --accent-foreground: #111827;
+  --destructive: #b91c1c;
+  --destructive-foreground: #ffffff;
+  --border: #e5e7eb;
+  --input: #d1d5db;
+  --ring: #2563eb;
+}
+
+/* shadcn/ui new-york default palette — flat zinc-based neutrals. */
+:root[data-theme="shadui"][data-mode="dark"] {
+  color-scheme: dark;
+  --color-bg-base: #0a0a0a;       /* zinc-950 */
+  --color-bg-panel: #0a0a0a;      /* card == background, delineated by border */
+  --color-bg-alt: #171717;        /* one step lighter for floats */
+  --background: #0a0a0a;
+  --foreground: #fafafa;
+  --card: #0a0a0a;
+  --card-foreground: #fafafa;
+  --popover: #0a0a0a;
+  --popover-foreground: #fafafa;
+  --primary: #fafafa;
+  --primary-foreground: #18181b;
+  --secondary: #27272a;           /* zinc-800 */
+  --secondary-foreground: #fafafa;
+  --muted: #27272a;
+  --muted-foreground: #a1a1aa;    /* zinc-400 */
+  --accent: #27272a;
+  --accent-foreground: #fafafa;
+  --destructive: #7f1d1d;
+  --destructive-foreground: #fafafa;
+  --border: #27272a;
+  --input: #27272a;
+  --ring: #d4d4d8;                /* zinc-300 */
+}
+
+:root[data-theme="shadui"][data-mode="light"] {
+  color-scheme: light;
+  --color-bg-base: #ffffff;
+  --color-bg-panel: #ffffff;
+  --color-bg-alt: #fafafa;        /* zinc-50 */
+  --background: #ffffff;
+  --foreground: #0a0a0a;
+  --card: #ffffff;
+  --card-foreground: #0a0a0a;
+  --popover: #ffffff;
+  --popover-foreground: #0a0a0a;
+  --primary: #18181b;             /* zinc-900 */
+  --primary-foreground: #fafafa;
+  --secondary: #f4f4f5;           /* zinc-100 */
+  --secondary-foreground: #18181b;
+  --muted: #f4f4f5;
+  --muted-foreground: #71717a;    /* zinc-500 */
+  --accent: #f4f4f5;
+  --accent-foreground: #18181b;
+  --destructive: #ef4444;
+  --destructive-foreground: #fafafa;
+  --border: #e4e4e7;              /* zinc-200 */
+  --input: #e4e4e7;
+  --ring: #a1a1aa;
 }
 
 html, body, #root {
