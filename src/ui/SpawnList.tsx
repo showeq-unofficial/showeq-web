@@ -1,12 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   createColumnHelper,
   flexRender,
   getCoreRowModel,
   getSortedRowModel,
   useReactTable,
+  type ColumnSizingState,
   type SortingState,
 } from '@tanstack/react-table';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import type { Spawn } from '@gen/seq/v1/events_pb';
 import { SpawnType } from '@gen/seq/v1/events_pb';
 import type { SpawnStore } from '../state/store';
@@ -33,7 +35,7 @@ const columns = [
   columnHelper.accessor('conColor', {
     id: 'con',
     header: '',
-    size: 12,
+    size: 16,
     cell: (info) => (
       <span
         className="inline-block h-2.5 w-2.5 rounded-full ring-1 ring-border"
@@ -41,6 +43,8 @@ const columns = [
       />
     ),
     enableSorting: false,
+    // Just a colored dot; resizing it would add zero value.
+    enableResizing: false,
   }),
   columnHelper.accessor('name', {
     header: 'Name',
@@ -120,6 +124,21 @@ export function SpawnList({
   const [sorting, setSorting] = useState<SortingState>([
     { id: 'distance', desc: false },
   ]);
+  // User-resized column widths, persisted so the layout survives reload.
+  // Keys are column ids; values are pixel widths. Empty object means
+  // "use the column's default size" — the default sizes are still set
+  // on each column above so a fresh user gets the legacy layout.
+  const [columnSizing, setColumnSizing] = useState<ColumnSizingState>(() => {
+    try {
+      const raw = localStorage.getItem('spawnlist.colWidths');
+      return raw ? (JSON.parse(raw) as ColumnSizingState) : {};
+    } catch {
+      return {};
+    }
+  });
+  useEffect(() => {
+    localStorage.setItem('spawnlist.colWidths', JSON.stringify(columnSizing));
+  }, [columnSizing]);
   // Filter mode: -1 = "All spawns", any non-negative integer = a
   // CategoryMgr category id (= index into the latest CategoriesUpdate)
   // that the spawn must match. Matches the showeq-c spawnlist2 category-
@@ -223,8 +242,13 @@ export function SpawnList({
   const table = useReactTable({
     data: rows,
     columns,
-    state: { sorting },
+    state: { sorting, columnSizing },
     onSortingChange: setSorting,
+    onColumnSizingChange: setColumnSizing,
+    // 'onChange' updates widths live during the drag; 'onEnd' would only
+    // commit on mouseup, which feels laggy for our small table.
+    columnResizeMode: 'onChange',
+    enableColumnResizing: true,
     // Key rows by spawn id, not by data-array index. Without this every
     // spawn add/remove shifts every subsequent row's TanStack id, React
     // sees the whole tail of <tbody> as new, and the browser unmount/
@@ -234,6 +258,48 @@ export function SpawnList({
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
   });
+
+  // Row virtualization. With 5000+ spawns the unvirtualized <tbody>
+  // pegged the main thread for ~600ms per refresh tick, blocking rAF and
+  // collapsing the canvas paint rate to ~2fps. Only ~30 rows are ever
+  // visible — virtualizing turns this into a bounded ~30-tr render.
+  const sortedRows = table.getRowModel().rows;
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  // Fixed row height keeps column widths aligned across virtual rows
+  // without per-row measurement cost. 22px = text-xs (~18px line-height)
+  // + py-0.5 (4px) + 1px border. Set as inline tr height below to lock.
+  const ROW_HEIGHT = 22;
+  const virtualizer = useVirtualizer({
+    count: sortedRows.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 8,
+  });
+  const virtualItems = virtualizer.getVirtualItems();
+  const totalSize = virtualizer.getTotalSize();
+  const padTop = virtualItems.length > 0 ? virtualItems[0].start : 0;
+  const padBot = virtualItems.length > 0
+    ? totalSize - virtualItems[virtualItems.length - 1].end
+    : 0;
+
+  // Auto-scroll to the selected row whenever the selection or its
+  // position in the sorted list changes. `align: 'center'` keeps the
+  // row visible past the sticky thead + player row at the top — using
+  // 'start' would tuck it under those overlays. Rows churn position on
+  // every refresh tick (sorted by distance), so this also keeps the
+  // selection in sight as you/the mob move.
+  const selectedIdx = useMemo(() => {
+    if (selectedId == null) return -1;
+    return sortedRows.findIndex((r) => r.original.id === selectedId);
+  }, [selectedId, sortedRows]);
+  useEffect(() => {
+    if (selectedIdx < 0) return;
+    virtualizer.scrollToIndex(selectedIdx, { align: 'center' });
+    // virtualizer instance is stable across renders; depending on it
+    // would re-fire only when a new instance is constructed (never in
+    // normal use), but ESLint can't see that — exclude it deliberately.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedIdx]);
 
   return (
     <div className="flex h-full flex-col">
@@ -296,32 +362,59 @@ export function SpawnList({
           </select>
         </label>
       </div>
-      {/*
-        TODO(perf): virtualize this table with @tanstack/react-virtual.
-        On busy zones we mount 300+ <tr>s and TanStack reorders by
-        distance every refresh — only ~30 rows are ever visible. See
-        NICE_TO_HAVE.md "Virtualize SpawnList". Current FPM control +
-        stable getRowId keep this acceptable but it's still O(rows) per
-        refresh.
-      */}
-      <div className="flex-1 overflow-auto">
-        <table className="w-full border-collapse text-xs">
-          <thead className="sticky top-0 bg-bg-alt">
+      <div ref={scrollRef} className="flex-1 overflow-auto">
+        {/*
+          table-fixed locks column widths to the first row's <th> sizes
+          so virtual rows (rendered in slices as the user scrolls) line
+          up regardless of which rows are mounted. Without it, the
+          browser would re-balance column widths every time the visible
+          slice changes and rows would visibly jitter horizontally.
+        */}
+        <table className="w-full table-fixed border-collapse text-xs">
+          <thead className="sticky top-0 z-[2] bg-bg-alt">
             {table.getHeaderGroups().map((hg) => (
               <tr key={hg.id}>
                 {hg.headers.map((h) => {
                   const sort = h.column.getIsSorted();
+                  const canResize = h.column.getCanResize();
                   return (
                     <th
                       key={h.id}
-                      className="select-none px-1.5 py-1 text-left font-medium text-foreground"
+                      className="relative select-none px-1.5 py-1 text-left font-medium text-foreground"
                       style={{ width: h.getSize() }}
-                      onClick={h.column.getToggleSortingHandler()}
                     >
-                      <span className="cursor-pointer">
+                      <span
+                        className="cursor-pointer"
+                        onClick={h.column.getToggleSortingHandler()}
+                      >
                         {flexRender(h.column.columnDef.header, h.getContext())}
                         {sort === 'asc' ? ' ▲' : sort === 'desc' ? ' ▼' : ''}
                       </span>
+                      {canResize && (
+                        // Drag handle: thin column-edge strip. Stops
+                        // mousedown propagation so dragging doesn't also
+                        // trigger the sort toggle on the header span.
+                        // touch-none disables touch scrolling so a drag
+                        // on mobile doesn't turn into a page-scroll
+                        // gesture.
+                        <span
+                          onMouseDown={(e) => {
+                            e.stopPropagation();
+                            h.getResizeHandler()(e);
+                          }}
+                          onTouchStart={(e) => {
+                            e.stopPropagation();
+                            h.getResizeHandler()(e);
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          className={
+                            'absolute right-0 top-0 h-full w-1 cursor-col-resize touch-none ' +
+                            (h.column.getIsResizing()
+                              ? 'bg-blue-500'
+                              : 'hover:bg-blue-500/60')
+                          }
+                        />
+                      )}
                     </th>
                   );
                 })}
@@ -370,7 +463,19 @@ export function SpawnList({
                 </tr>
               );
             })()}
-            {table.getRowModel().rows.map((r) => {
+            {/*
+              Spacer rows fill the area above/below the visible slice so
+              the scroll container's intrinsic height matches what the
+              full unvirtualized list would be — keeps the scrollbar
+              honest and Page-Up/Down behaving correctly.
+            */}
+            {padTop > 0 && (
+              <tr style={{ height: padTop }}>
+                <td colSpan={columns.length} />
+              </tr>
+            )}
+            {virtualItems.map((vi) => {
+              const r = sortedRows[vi.index];
               const isSelected = r.original.id === selectedId;
               const filterTint = rowTints
                 ? tintForFilterFlags(r.original.filterFlags)
@@ -379,6 +484,7 @@ export function SpawnList({
                 <tr
                   key={r.id}
                   onClick={() => onSelect(r.original.id)}
+                  style={{ height: ROW_HEIGHT }}
                   className={
                     'cursor-pointer border-b border-border ' +
                     (isSelected
@@ -396,6 +502,11 @@ export function SpawnList({
                 </tr>
               );
             })}
+            {padBot > 0 && (
+              <tr style={{ height: padBot }}>
+                <td colSpan={columns.length} />
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

@@ -1,12 +1,14 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   createColumnHelper,
   flexRender,
   getCoreRowModel,
   getSortedRowModel,
   useReactTable,
+  type ColumnSizingState,
   type SortingState,
 } from '@tanstack/react-table';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import type { SpawnStore } from '../state/store';
 import type { SeqClient } from '../net/client';
 
@@ -117,6 +119,18 @@ export function SpawnPointList({
   const [sorting, setSorting] = useState<SortingState>([
     { id: 'remainingS', desc: false },
   ]);
+  // User-resized column widths, persisted across reloads.
+  const [columnSizing, setColumnSizing] = useState<ColumnSizingState>(() => {
+    try {
+      const raw = localStorage.getItem('spawnpointlist.colWidths');
+      return raw ? (JSON.parse(raw) as ColumnSizingState) : {};
+    } catch {
+      return {};
+    }
+  });
+  useEffect(() => {
+    localStorage.setItem('spawnpointlist.colWidths', JSON.stringify(columnSizing));
+  }, [columnSizing]);
 
   const rows = useMemo<Row[]>(() => {
     void tick;
@@ -173,11 +187,38 @@ export function SpawnPointList({
   const table = useReactTable({
     data: rows,
     columns,
-    state: { sorting },
+    state: { sorting, columnSizing },
     onSortingChange: setSorting,
+    onColumnSizingChange: setColumnSizing,
+    columnResizeMode: 'onChange',
+    enableColumnResizing: true,
+    // Stable row id so spawn-point churn doesn't shift TanStack ids and
+    // unmount/remount every <tr>; matches the SpawnList convention.
+    getRowId: (row) => row.key,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
   });
+
+  // Row virtualization — see SpawnList.tsx for rationale. Spawn-point
+  // counts are typically smaller than spawn counts but a long-running
+  // session in a busy zone can accumulate hundreds of points, and the
+  // legacy unvirtualized render started costing real frame time around
+  // ~200 rows.
+  const sortedRows = table.getRowModel().rows;
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const ROW_HEIGHT = 22;
+  const virtualizer = useVirtualizer({
+    count: sortedRows.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 8,
+  });
+  const virtualItems = virtualizer.getVirtualItems();
+  const totalSize = virtualizer.getTotalSize();
+  const padTop = virtualItems.length > 0 ? virtualItems[0].start : 0;
+  const padBot = virtualItems.length > 0
+    ? totalSize - virtualItems[virtualItems.length - 1].end
+    : 0;
 
   return (
     <div className="flex h-full flex-col">
@@ -188,24 +229,46 @@ export function SpawnPointList({
           {' '}up
         </span>
       </div>
-      <div className="flex-1 overflow-auto">
-        <table className="w-full border-collapse text-xs">
-          <thead className="sticky top-0 bg-bg-alt">
+      <div ref={scrollRef} className="flex-1 overflow-auto">
+        <table className="w-full table-fixed border-collapse text-xs">
+          <thead className="sticky top-0 z-[2] bg-bg-alt">
             {table.getHeaderGroups().map((hg) => (
               <tr key={hg.id}>
                 {hg.headers.map((h) => {
                   const sort = h.column.getIsSorted();
+                  const canResize = h.column.getCanResize();
                   return (
                     <th
                       key={h.id}
-                      className="select-none px-1.5 py-1 text-left font-medium text-foreground"
+                      className="relative select-none px-1.5 py-1 text-left font-medium text-foreground"
                       style={{ width: h.getSize() }}
-                      onClick={h.column.getToggleSortingHandler()}
                     >
-                      <span className="cursor-pointer">
+                      <span
+                        className="cursor-pointer"
+                        onClick={h.column.getToggleSortingHandler()}
+                      >
                         {flexRender(h.column.columnDef.header, h.getContext())}
                         {sort === 'asc' ? ' ▲' : sort === 'desc' ? ' ▼' : ''}
                       </span>
+                      {canResize && (
+                        <span
+                          onMouseDown={(e) => {
+                            e.stopPropagation();
+                            h.getResizeHandler()(e);
+                          }}
+                          onTouchStart={(e) => {
+                            e.stopPropagation();
+                            h.getResizeHandler()(e);
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          className={
+                            'absolute right-0 top-0 h-full w-1 cursor-col-resize touch-none ' +
+                            (h.column.getIsResizing()
+                              ? 'bg-blue-500'
+                              : 'hover:bg-blue-500/60')
+                          }
+                        />
+                      )}
                     </th>
                   );
                 })}
@@ -213,13 +276,20 @@ export function SpawnPointList({
             ))}
           </thead>
           <tbody>
-            {table.getRowModel().rows.map((r) => {
+            {padTop > 0 && (
+              <tr style={{ height: padTop }}>
+                <td colSpan={columns.length} />
+              </tr>
+            )}
+            {virtualItems.map((vi) => {
+              const r = sortedRows[vi.index];
               // Legacy rule: bold + red text when the mob is heavily
               // overdue (age > 220 ≈ 86% past cycle).
               const overdue = r.original.age > 220;
               return (
                 <tr
                   key={r.id}
+                  style={{ height: ROW_HEIGHT }}
                   className={
                     'border-b border-border ' +
                     (overdue
@@ -235,6 +305,11 @@ export function SpawnPointList({
                 </tr>
               );
             })}
+            {padBot > 0 && (
+              <tr style={{ height: padBot }}>
+                <td colSpan={columns.length} />
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
