@@ -2,3 +2,6 @@ Target server: both Live EQ (`../showeq-daemon/`) and Project Quarm (`../showeq-
 No hardcoded opcodes — use `showeq-proto` enums only. The web layer should never branch on target server; if a feature seems to need target-specific code, the difference belongs in the daemon, not the client.
 Proto schema is unified — there is no Quarm-specific proto. Both daemons emit the same `seq.v1.*` messages. If a feature requires a new proto field, do it as part of showeq-daemon (Live) work first; never request Quarm-only proto.
 Chat line label + colour is centralised in `src/lib/chatColors.ts`. Two key spaces: `cc:<id>` for raw EQ ChatColor (CC_*), `mt:<id>` MessageType fallback when chatColor=0. Unknown ids fall through to a gray `CC#<n>` / `#<n>` placeholder — when one shows up in the UI, add an entry to `CHAT_COLOR_ENTRIES` (label + default hex + category) rather than adding bespoke handling elsewhere. Categories drive the settings panel grouping.
+Use `~/.bun/bin/bun` for all JS tooling — system Node 18 breaks Vite/Vitest.
+Scripts: `bun run dev` (Vite), `bun run gen` (regen TS bindings from `proto/` via buf), `bun run typecheck`, `bun run test` (vitest), `bun run test:e2e` (playwright), `bun run smoke`.
+UI stack: Tailwind v4, TanStack Table, shadcn/ui (Radix-backed, à la carte components under `src/components/ui/`).
