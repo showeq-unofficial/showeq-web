@@ -6,6 +6,7 @@ const KEY_SELECT_ON_CONSIDER  = 'showeq.selectOnConsider';
 const KEY_SELECT_ON_TARGET    = 'showeq.selectOnTarget';
 const KEY_DESELECT_ON_UNTARGET = 'showeq.deselectOnUntarget';
 const KEY_TRACK_PLAYER        = 'showeq.trackPlayer';
+const KEY_SMOOTH_MOVEMENT     = 'showeq.smoothMovement';
 
 function readBool(key: string, fallback: boolean): boolean {
   const raw = localStorage.getItem(key);
@@ -45,6 +46,8 @@ export const localPrefs = {
   setDeselectOnUntarget: (v: boolean) => writeBool(KEY_DESELECT_ON_UNTARGET, v),
   trackPlayer: () => readBool(KEY_TRACK_PLAYER, false),
   setTrackPlayer: (v: boolean) => writeBool(KEY_TRACK_PLAYER, v),
+  smoothMovement: () => readBool(KEY_SMOOTH_MOVEMENT, true),
+  setSmoothMovement: (v: boolean) => writeBool(KEY_SMOOTH_MOVEMENT, v),
 
   // Floating-window positions are offsets from the window's CSS-centered
   // initial position (the {0,0} default keeps it centered on first open).

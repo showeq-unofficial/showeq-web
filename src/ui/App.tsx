@@ -153,6 +153,7 @@ export function App() {
   const [selectOnTarget, setSelectOnTarget] = useState(() => localPrefs.selectOnTarget());
   const [deselectOnUntarget, setDeselectOnUntarget] = useState(() => localPrefs.deselectOnUntarget());
   const [trackPlayer, setTrackPlayer] = useState(() => localPrefs.trackPlayer());
+  const [smoothMovement, setSmoothMovement] = useState(() => localPrefs.smoothMovement());
   // Live SeqClient for panels that need to send mutations back to the
   // daemon (e.g. FilterRulesPanel). Refreshed each time the URL changes.
   const clientRef = useRef<SeqClient | null>(null);
@@ -172,6 +173,10 @@ export function App() {
   const updateTrackPlayer = (v: boolean) => {
     setTrackPlayer(v);
     localPrefs.setTrackPlayer(v);
+  };
+  const updateSmoothMovement = (v: boolean) => {
+    setSmoothMovement(v);
+    localPrefs.setSmoothMovement(v);
   };
 
   useEffect(() => {
@@ -365,6 +370,13 @@ export function App() {
                 >
                   Track player
                 </MenubarCheckboxItem>
+                <MenubarCheckboxItem
+                  checked={smoothMovement}
+                  onCheckedChange={updateSmoothMovement}
+                  onSelect={(e) => e.preventDefault()}
+                >
+                  Smooth movement
+                </MenubarCheckboxItem>
               </MenubarContent>
             </MenubarMenu>
           </Menubar>
@@ -439,6 +451,7 @@ export function App() {
             onSelect={onSelect}
             trackPlayer={trackPlayer}
             onTrackPlayerChange={updateTrackPlayer}
+            smoothMovement={smoothMovement}
           />
         </div>
         {showRightRail && (

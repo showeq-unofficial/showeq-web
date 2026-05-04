@@ -110,6 +110,7 @@ export function MapCanvas({
   onSelect,
   trackPlayer,
   onTrackPlayerChange,
+  smoothMovement,
 }: {
   store: SpawnStore;
   tick: number;
@@ -118,6 +119,7 @@ export function MapCanvas({
   onSelect: (id: number | null) => void;
   trackPlayer: boolean;
   onTrackPlayerChange: (v: boolean) => void;
+  smoothMovement: boolean;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -204,6 +206,11 @@ export function MapCanvas({
   // Mirrors showeq-c's tFollowPlayer (map.h:98).
   const trackPlayerRef = useRef(trackPlayer);
   useEffect(() => { trackPlayerRef.current = trackPlayer; }, [trackPlayer]);
+  // When false the smoother still ingests updates (so re-enabling is
+  // instant), but smoothedPos returns the raw fallback — dots and the
+  // player snap directly to each daemon update.
+  const smoothMovementRef = useRef(smoothMovement);
+  useEffect(() => { smoothMovementRef.current = smoothMovement; }, [smoothMovement]);
   const onTrackPlayerChangeRef = useRef(onTrackPlayerChange);
   useEffect(() => {
     onTrackPlayerChangeRef.current = onTrackPlayerChange;
@@ -448,7 +455,7 @@ export function MapCanvas({
         animNow,
       );
       const smoothedPos = (id: number, fallback: { x: number; y: number }) =>
-        smoother.posAt(id, animNow) ?? fallback;
+        (smoothMovementRef.current ? smoother.posAt(id, animNow) : fallback) ?? fallback;
 
       // Pick viewport bounds: zone geometry → spawn-derived → fallback box.
       let minX: number, minY: number, maxX: number, maxY: number;
