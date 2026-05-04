@@ -85,17 +85,21 @@ function loadInitialDockLocation(): Record<PanelKey, DockLocation> {
 function loadInitialPanelOrder(): Record<RailSide, PanelKey[]> {
   const v = readLegacyJson<Partial<Record<RailSide, unknown>>>('showeq.panelOrder',
     (x): x is Partial<Record<RailSide, unknown>> => typeof x === 'object' && x !== null);
+  // No legacy data → use the documented default exactly. Don't fall
+  // through to the backfill loop below, whose iteration order is the
+  // declaration order of DEFAULT_DOCK_LOCATION and may not match
+  // DEFAULT_PANEL_ORDER (which is the rail-render order users see).
+  if (!v) {
+    return { left: [...DEFAULT_PANEL_ORDER.left], right: [...DEFAULT_PANEL_ORDER.right] };
+  }
   const result: Record<RailSide, PanelKey[]> = {
-    left:  Array.isArray(v?.left)  ? v.left.filter(isPanelKey)  : [],
-    right: Array.isArray(v?.right) ? v.right.filter(isPanelKey) : [],
+    left:  Array.isArray(v.left)  ? v.left.filter(isPanelKey)  : [],
+    right: Array.isArray(v.right) ? v.right.filter(isPanelKey) : [],
   };
   // Backfill any keys missing from saved order with their defaults.
   const seen = new Set<PanelKey>([...result.left, ...result.right]);
   for (const k of Object.keys(DEFAULT_DOCK_LOCATION) as PanelKey[]) {
     if (!seen.has(k)) result[DEFAULT_DOCK_LOCATION[k]].push(k);
-  }
-  if (result.left.length === 0 && result.right.length === 0) {
-    return { left: [...DEFAULT_PANEL_ORDER.left], right: [...DEFAULT_PANEL_ORDER.right] };
   }
   return result;
 }

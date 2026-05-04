@@ -1,3 +1,4 @@
+/// <reference types="vitest" />
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
@@ -18,5 +19,12 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
+  },
+  test: {
+    // happy-dom is enough for store + localStorage tests; we don't
+    // render React components in unit tests (the panel/drag UI lives
+    // in playwright e2e instead).
+    environment: 'happy-dom',
+    include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
   },
 });
