@@ -6,7 +6,6 @@ import {
 } from '@gen/seq/v1/events_pb';
 import type { SeqClient } from '../net/client';
 import type { SpawnStore } from '../state/store';
-import { ChatColorsPanel } from './ChatColorsPanel';
 
 // Preferences tab body. Daemon-side prefs flow through PrefsBroker:
 // each editor reads the current value from the store, lets the user
@@ -199,8 +198,6 @@ export function PreferencesPanel({
           Saved daemon-side and shared across all connected clients.
         </p>
       </section>
-      <hr className="border-border" />
-      <ChatColorsPanel />
     </div>
   );
 }

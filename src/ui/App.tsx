@@ -7,6 +7,13 @@ import {
   MenubarSeparator,
   MenubarTrigger,
 } from '@/components/ui/menubar';
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@/components/ui/tabs';
+import { ChatColorsPanel } from './ChatColorsPanel';
 import { SeqClient } from '../net/client';
 import { localPrefs } from '../state/localPrefs';
 import { SpawnStore } from '../state/store';
@@ -523,14 +530,25 @@ export function App() {
       )}
       <SettingsModal
         open={settingsOpen}
-        title="Preferences"
+        title="Settings"
         onClose={() => setSettingsOpen(false)}
       >
-        <PreferencesPanel
-          store={store}
-          client={clientRef.current}
-          tick={tick}
-        />
+        <Tabs defaultValue="preferences" className="gap-0">
+          <TabsList className="sticky top-0 z-10 m-3 self-start bg-bg-panel">
+            <TabsTrigger value="preferences">Preferences</TabsTrigger>
+            <TabsTrigger value="chat-colors">Chat Colors</TabsTrigger>
+          </TabsList>
+          <TabsContent value="preferences">
+            <PreferencesPanel
+              store={store}
+              client={clientRef.current}
+              tick={tick}
+            />
+          </TabsContent>
+          <TabsContent value="chat-colors">
+            <ChatColorsPanel />
+          </TabsContent>
+        </Tabs>
       </SettingsModal>
       <SettingsModal
         open={filtersOpen}
