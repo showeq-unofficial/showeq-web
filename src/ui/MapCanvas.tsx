@@ -30,6 +30,78 @@ const DRAG_THRESHOLD = 4;
 
 type SpawnHit = { id: number; x: number; y: number };
 
+// Per-spawn position with linear interpolation between the last two
+// daemon updates. Daemon ships position updates at ~5 Hz; without lerp
+// dots visibly teleport on each update. We lerp from the previously
+// rendered position to the latest target across the inter-update
+// interval, so motion looks continuous at the render rate.
+type SmoothedPos = {
+  prevX: number;
+  prevY: number;
+  targetX: number;
+  targetY: number;
+  updateTimeMs: number;
+  durationMs: number;  // 0 = snap (no animation)
+};
+
+class PosSmoother {
+  private readonly positions = new Map<number, SmoothedPos>();
+
+  // Walk the current spawn set; stamp new ids, retarget moved ids, drop
+  // disappeared ids. `players` is folded into the same map so the player
+  // marker (drawn separately from the spawn loop) interpolates in lock
+  // step with everyone else.
+  sync(ids: Iterable<{ id: number; x: number; y: number }>, now: number) {
+    const seen = new Set<number>();
+    for (const { id, x, y } of ids) {
+      seen.add(id);
+      const cur = this.positions.get(id);
+      if (!cur) {
+        this.positions.set(id, {
+          prevX: x, prevY: y,
+          targetX: x, targetY: y,
+          updateTimeMs: now, durationMs: 0,
+        });
+        continue;
+      }
+      if (cur.targetX === x && cur.targetY === y) continue;
+      // Lerp from where we are *visually right now* so a fresh update
+      // mid-animation slides cleanly instead of snapping back to the
+      // prior `prev` anchor.
+      const cp = this.posInternal(cur, now);
+      cur.prevX = cp.x;
+      cur.prevY = cp.y;
+      cur.targetX = x;
+      cur.targetY = y;
+      // Use the actual inter-update interval as the lerp duration so the
+      // animation finishes about when the next update arrives. Clamp:
+      // too short = back to teleporting; too long = dots lag the truth
+      // across pauses or zone-load gaps.
+      const elapsed = now - cur.updateTimeMs;
+      cur.durationMs = Math.min(600, Math.max(80, elapsed));
+      cur.updateTimeMs = now;
+    }
+    for (const id of this.positions.keys()) {
+      if (!seen.has(id)) this.positions.delete(id);
+    }
+  }
+
+  posAt(id: number, now: number): { x: number; y: number } | undefined {
+    const sp = this.positions.get(id);
+    return sp ? this.posInternal(sp, now) : undefined;
+  }
+
+  private posInternal(sp: SmoothedPos, now: number) {
+    if (sp.durationMs <= 0) return { x: sp.targetX, y: sp.targetY };
+    const elapsed = now - sp.updateTimeMs;
+    const t = Math.min(1, Math.max(0, elapsed / sp.durationMs));
+    return {
+      x: sp.prevX + (sp.targetX - sp.prevX) * t,
+      y: sp.prevY + (sp.targetY - sp.prevY) * t,
+    };
+  }
+}
+
 export function MapCanvas({
   store,
   tick,
@@ -49,6 +121,10 @@ export function MapCanvas({
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
+  // Position smoother — survives across re-renders so we never lose
+  // mid-flight lerp state when React re-runs the render-loop effect.
+  const smootherRef = useRef<PosSmoother | null>(null);
+  if (smootherRef.current === null) smootherRef.current = new PosSmoother();
   // Latest projected screen positions of spawns + the player, refreshed
   // every render frame. Read by mouse handlers to do hit-testing without
   // re-projecting the world.
@@ -356,6 +432,24 @@ export function MapCanvas({
       const player = store.player();
       const visible = visibleLayersRef.current;
 
+      // Refresh smoother against the latest store state — adds new ids,
+      // retargets moved ids, prunes removed ids. `pos` may be missing on
+      // a freshly-spawned record before the first OP_ClientUpdate (rare
+      // but observed); skip those so we don't peg them at (0, 0).
+      const smoother = smootherRef.current!;
+      const animNow = performance.now();
+      smoother.sync(
+        (function* () {
+          for (const s of spawns) {
+            if (!s.pos) continue;
+            yield { id: s.id, x: s.pos.x, y: s.pos.y };
+          }
+        })(),
+        animNow,
+      );
+      const smoothedPos = (id: number, fallback: { x: number; y: number }) =>
+        smoother.posAt(id, animNow) ?? fallback;
+
       // Pick viewport bounds: zone geometry → spawn-derived → fallback box.
       let minX: number, minY: number, maxX: number, maxY: number;
       if (geom && (geom.minX !== 0 || geom.maxX !== 0)) {
@@ -389,8 +483,9 @@ export function MapCanvas({
       if (pendingCenterRef.current != null) {
         const target = spawns.find((s) => s.id === pendingCenterRef.current);
         if (target?.pos) {
-          panXRef.current = -(target.pos.x - ccx) * scale;
-          panYRef.current = -(target.pos.y - ccy) * scale;
+          const tp = smoothedPos(target.id, target.pos);
+          panXRef.current = -(tp.x - ccx) * scale;
+          panYRef.current = -(tp.y - ccy) * scale;
         }
         pendingCenterRef.current = null;
       }
@@ -398,9 +493,12 @@ export function MapCanvas({
       // Track-player: pin pan so the player stays at the canvas center.
       // Wins over pendingCenter — clicking a far spawn while tracking
       // bumps zoom (selection effect) but keeps the view on the player.
+      // Uses the smoothed player position so the camera glides with the
+      // marker instead of snapping at each daemon update.
       if (trackPlayerRef.current && player?.pos) {
-        panXRef.current = -(player.pos.x - ccx) * scale;
-        panYRef.current = -(player.pos.y - ccy) * scale;
+        const pp = smoothedPos(player.id, player.pos);
+        panXRef.current = -(pp.x - ccx) * scale;
+        panYRef.current = -(pp.y - ccy) * scale;
       }
 
       const project = (x: number, y: number): [number, number] => [
@@ -487,7 +585,8 @@ export function MapCanvas({
       let selectedScreen: { x: number; y: number } | null = null;
       for (const s of spawns) {
         if (s.id === player?.id) continue;
-        const [px, py] = project(s.pos?.x ?? 0, s.pos?.y ?? 0);
+        const sp = smoothedPos(s.id, s.pos ?? { x: 0, y: 0 });
+        const [px, py] = project(sp.x, sp.y);
         hits.push({ id: s.id, x: px, y: py });
         if (s.id === selId) selectedScreen = { x: px, y: py };
         // Group-member ring (under selection ring so selection wins).
@@ -518,7 +617,8 @@ export function MapCanvas({
       // center line + red cone). Ports showeq-c's paintPlayerBackground +
       // paintPlayerView from showeq-c/src/map.cpp:3530-3593.
       if (player?.pos) {
-        const [px, py] = project(player.pos.x, player.pos.y);
+        const pp = smoothedPos(player.id, player.pos);
+        const [px, py] = project(pp.x, pp.y);
         const scaledFov = fovDistanceRef.current * scale;
         if (player.id) hits.push({ id: player.id, x: px, y: py });
 
