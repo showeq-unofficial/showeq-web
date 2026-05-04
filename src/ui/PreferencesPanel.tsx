@@ -1,5 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { create } from '@bufbuild/protobuf';
+import { Monitor, Moon, Sun } from 'lucide-react';
 import {
   NetworkDeviceSchema,
   type NetworkDevice,
@@ -7,7 +8,6 @@ import {
 import type { SeqClient } from '../net/client';
 import type { SpawnStore } from '../state/store';
 import {
-  MODE_OPTIONS,
   THEME_OPTIONS,
   getMode,
   getTheme,
@@ -17,6 +17,12 @@ import {
   type Mode,
   type Theme,
 } from '../state/theme';
+
+const MODE_ICONS: { value: Mode; label: string; Icon: typeof Sun }[] = [
+  { value: 'system', label: 'System', Icon: Monitor },
+  { value: 'light',  label: 'Light',  Icon: Sun },
+  { value: 'dark',   label: 'Dark',   Icon: Moon },
+];
 
 // Preferences tab body. Daemon-side prefs flow through PrefsBroker:
 // each editor reads the current value from the store, lets the user
@@ -123,20 +129,37 @@ export function PreferencesPanel({
         <label className="text-[11px] uppercase tracking-wide text-muted-foreground">
           Appearance
         </label>
-        <label className="flex items-center gap-2">
+        <div className="flex items-center gap-2">
           <span className="w-20 text-foreground">Mode</span>
-          <select
-            value={mode}
-            onChange={(e) => setMode(e.target.value as Mode)}
-            className="flex-1 rounded border border-border bg-bg-base px-2 py-1 font-mono text-[11px] text-foreground focus:border-blue-500 focus:outline-none"
+          <div
+            role="radiogroup"
+            aria-label="Color mode"
+            className="inline-flex rounded border border-border bg-bg-base p-0.5"
           >
-            {MODE_OPTIONS.map((m) => (
-              <option key={m} value={m}>
-                {m === 'system' ? 'System (follow OS)' : m[0].toUpperCase() + m.slice(1)}
-              </option>
-            ))}
-          </select>
-        </label>
+            {MODE_ICONS.map(({ value, label, Icon }) => {
+              const active = mode === value;
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  aria-label={label}
+                  title={value === 'system' ? 'System (follow OS)' : label}
+                  onClick={() => setMode(value)}
+                  className={
+                    'flex h-7 w-7 items-center justify-center rounded transition-colors ' +
+                    (active
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:bg-bg-alt hover:text-foreground')
+                  }
+                >
+                  <Icon className="h-4 w-4" />
+                </button>
+              );
+            })}
+          </div>
+        </div>
         <label className="flex items-center gap-2">
           <span className="w-20 text-foreground">Theme</span>
           <select
