@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import Draggable, { type DraggableData, type DraggableEvent } from 'react-draggable';
 import { localPrefs } from '../state/localPrefs';
 import type { SpawnStore } from '../state/store';
@@ -9,6 +9,34 @@ const STAT_LABELS = ['STR', 'STA', 'AGI', 'DEX', 'CHA', 'INT', 'WIS'] as const;
 // Indices into Item.resists[] / ItemCacheTotals.resists[]; mirrors
 // ItemResistIndex.
 const RESIST_LABELS = ['CR', 'DR', 'PR', 'MR', 'FR'] as const;
+// Worn-slot labels keyed by slot index. Mirrors the EQ slot enum (see
+// proto WornSet doc / showeq-daemon/src/itempacket.h). Entries 23-30
+// (PersonalInv) and 35 (Cursor) aren't gear and don't appear in totals.
+const WORN_SLOT_LABELS: Record<number, string> = {
+  0: 'Charm',
+  1: 'Ear L',
+  2: 'Head',
+  3: 'Face',
+  4: 'Ear R',
+  5: 'Neck',
+  6: 'Shoulder',
+  7: 'Arms',
+  8: 'Back',
+  9: 'Wrist L',
+  10: 'Wrist R',
+  11: 'Range',
+  12: 'Hands',
+  13: 'Primary',
+  14: 'Secondary',
+  15: 'Finger L',
+  16: 'Finger R',
+  17: 'Chest',
+  18: 'Legs',
+  19: 'Feet',
+  20: 'Waist',
+  21: 'PowerSrc',
+  22: 'Ammo',
+};
 
 function Cell({ label, value }: { label: string; value: number | string }) {
   return (
@@ -38,22 +66,7 @@ export function InventoryStatsPanel({
   };
 
   const t = store.totals();
-  const items = store.allItems();
-
-  // The per-item list: only items that contribute to HP, mana, AC, or
-  // any stat/resist worth showing. Filters out consumables/quest items
-  // with all-zero gear stats so the panel stays focused on gear.
-  const gearItems = useMemo(() => {
-    return items
-      .filter((it) => {
-        if (it.hp || it.mana || it.endurance || it.ac) return true;
-        if (it.stats.some((v) => v !== 0)) return true;
-        if (it.resists.some((v) => v !== 0)) return true;
-        if (it.corruption) return true;
-        return false;
-      })
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [items]);
+  const worn = store.wornItems();
 
   return (
     <Draggable
@@ -82,10 +95,10 @@ export function InventoryStatsPanel({
 
         <div className="flex flex-col gap-2 p-2">
           <div className="text-[10px] text-muted-foreground">
-            Sums over every item the daemon has observed via OP_ItemPacket
-            this session and prior runs. v1 scope: counts everything in the
-            cache (worn + inventory + bags + bank) — worn-only requires
-            decoding OP_PlayerProfile worn-slot offsets.
+            Sums HP/mana/AC/stats across the player's currently equipped
+            gear, tracked via the OP_ItemPacket wrapper's main_slot /
+            sub_slot fields. Empty slots and bagged items are excluded.
+            Augment contributions are not yet folded in.
           </div>
 
           <div className="grid grid-cols-2 gap-1">
@@ -109,24 +122,27 @@ export function InventoryStatsPanel({
             ))}
           </div>
 
-          {gearItems.length > 0 && (
-            <details className="rounded border border-border bg-bg-base/50">
+          {worn.length > 0 && (
+            <details className="rounded border border-border bg-bg-base/50" open>
               <summary className="cursor-pointer px-1.5 py-1 text-xs text-muted-foreground hover:text-foreground">
-                Gear items ({gearItems.length})
+                Worn slots ({worn.length})
               </summary>
               <ul className="max-h-64 overflow-y-auto px-2 py-1 text-xs">
-                {gearItems.map((it) => (
+                {worn.map(({ slot, item }) => (
                   <li
-                    key={it.id}
+                    key={slot}
                     className="flex items-baseline justify-between gap-2 border-b border-border/30 py-0.5 last:border-b-0"
                   >
-                    <span className="truncate text-foreground" title={it.name}>
-                      {it.name}
+                    <span className="shrink-0 w-16 text-[10px] uppercase tracking-wide text-muted-foreground">
+                      {WORN_SLOT_LABELS[slot] ?? `#${slot}`}
+                    </span>
+                    <span className="flex-1 truncate text-foreground" title={item.name}>
+                      {item.name}
                     </span>
                     <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
-                      {it.hp ? `${it.hp}hp ` : ''}
-                      {it.mana ? `${it.mana}m ` : ''}
-                      {it.ac ? `${it.ac}ac` : ''}
+                      {item.hp ? `${item.hp}hp ` : ''}
+                      {item.mana ? `${item.mana}m ` : ''}
+                      {item.ac ? `${item.ac}ac` : ''}
                     </span>
                   </li>
                 ))}

@@ -13,6 +13,7 @@ import type {
   Pref,
   Spawn,
   SpawnPoint,
+  WornSet,
 } from '@gen/seq/v1/events_pb';
 
 // One chat-log line: the wire ChatMessage plus the seq the daemon used,
@@ -115,11 +116,20 @@ export class SpawnStore {
   // Populated wholesale by PrefsSnapshot, then mutated incrementally by
   // PrefChanged.
   private prefs = new Map<string, Pref>();
-  // Mirror of the daemon's persistent itemId -> Item cache. v1 scope:
-  // contains every item ever observed via OP_ItemPacket (worn,
-  // inventory, bags, bank). Worn-only requires daemon-side decoding of
-  // OP_PlayerProfile worn-slot offsets, which is deferred.
+  // Mirror of the daemon's persistent itemId -> Item cache. Contains
+  // every item ever observed via OP_ItemPacket (worn, inventory, bags,
+  // bank) — the cache is the lookup table for resolving an itemId to
+  // its template; worn membership is tracked separately via wornSlots.
   private items = new Map<number, Item>();
+  // Slot index (0..22) -> itemId currently equipped there, mirroring
+  // the daemon's ItemCache::wornSlots() (populated from each
+  // OP_ItemPacket wrapper's main_slot=0 / sub_slot fields). Empty until
+  // the first worn_set arrives — the daemon emits one on each
+  // equip/un-equip plus inside the initial Snapshot.
+  private wornSlots = new Map<number, number>();
+  // Aggregate sums over the worn set above (HP/mana/AC/stats/resists).
+  // Recomputed by the daemon and re-sent as ItemCacheTotals on each
+  // worn change, alongside the WornSet event.
   private itemTotals: ItemCacheTotals | undefined;
   // Bounded ring buffers (oldest first). Growth capped at the *_LIMIT
   // constants above to prevent unbounded memory in long sessions.
@@ -139,6 +149,7 @@ export class SpawnStore {
         this.spawns.clear();
         this.spawnPoints.clear();
         this.items.clear();
+        this.wornSlots.clear();
         this.zoneShort = p.value.zoneShort;
         this.zoneLong = p.value.zoneLong;
         this.playerId = p.value.playerId;
@@ -147,6 +158,7 @@ export class SpawnStore {
         for (const sp of p.value.spawnPoints) this.spawnPoints.set(sp.key, sp);
         for (const it of p.value.items) this.items.set(it.id, it);
         this.itemTotals = p.value.itemTotals;
+        if (p.value.wornSet) this.applyWornSet(p.value.wornSet);
         break;
       }
       case 'zoneChanged':
@@ -173,6 +185,9 @@ export class SpawnStore {
         break;
       case 'itemTotals':
         this.itemTotals = p.value;
+        break;
+      case 'wornSet':
+        this.applyWornSet(p.value);
         break;
       case 'spawnAdded':
         if (p.value.spawn) this.spawns.set(p.value.spawn.id, p.value.spawn);
@@ -287,6 +302,20 @@ export class SpawnStore {
   allSpawnPoints(): SpawnPoint[] { return Array.from(this.spawnPoints.values()); }
   allItems(): Item[] { return Array.from(this.items.values()); }
   totals(): ItemCacheTotals | undefined { return this.itemTotals; }
+  // Returns the player's currently equipped gear as (slot index, item)
+  // pairs sorted by slot. An equipped slot whose itemId is not yet in
+  // the cache (rare race between WornSet and the corresponding
+  // ItemLearned) is skipped — the totals proto already accounts for it.
+  wornItems(): { slot: number; item: Item }[] {
+    const out: { slot: number; item: Item }[] = [];
+    const slots = Array.from(this.wornSlots.keys()).sort((a, b) => a - b);
+    for (const slot of slots) {
+      const id = this.wornSlots.get(slot)!;
+      const item = this.items.get(id);
+      if (item) out.push({ slot, item });
+    }
+    return out;
+  }
   zone(): string { return this.zoneShort; }
   zoneLongName(): string { return this.zoneLong; }
   seq(): bigint { return this.lastSeq; }
@@ -436,6 +465,14 @@ export class SpawnStore {
     }
     if (this.expSamples.length > EXP_SAMPLE_LIMIT) {
       this.expSamples.splice(0, this.expSamples.length - EXP_SAMPLE_LIMIT);
+    }
+  }
+
+  private applyWornSet(ws: WornSet): void {
+    this.wornSlots.clear();
+    const n = Math.min(ws.slotIndices.length, ws.itemIds.length);
+    for (let i = 0; i < n; i++) {
+      this.wornSlots.set(ws.slotIndices[i], ws.itemIds[i]);
     }
   }
 
