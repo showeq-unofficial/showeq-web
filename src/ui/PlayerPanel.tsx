@@ -82,7 +82,7 @@ function PanelButton({ label, onClick }: { label: string; onClick: () => void })
     <button
       type="button"
       onClick={onClick}
-      className="rounded border border-border bg-bg-base px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-foreground hover:border-blue-500/60 hover:bg-blue-600/20 hover:text-blue-100"
+      className="rounded border border-border bg-bg-base px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-foreground hover:border-ring/60 hover:bg-accent hover:text-accent-foreground"
     >
       {label}
     </button>

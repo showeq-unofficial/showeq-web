@@ -38,7 +38,7 @@ export function ResizeHandle({ onDrag }: { onDrag: (dx: number) => void }) {
       }}
       role="separator"
       aria-orientation="vertical"
-      className="relative w-1 shrink-0 cursor-col-resize bg-border transition-colors hover:bg-blue-600"
+      className="relative w-1 shrink-0 cursor-col-resize bg-border transition-colors hover:bg-primary"
     >
       {/* Wider invisible hit-area so the user doesn't have to hit a 4px
           target precisely. */}

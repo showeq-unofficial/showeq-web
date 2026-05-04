@@ -165,7 +165,7 @@ export function PreferencesPanel({
           <select
             value={themeName}
             onChange={(e) => setTheme(e.target.value as Theme)}
-            className="flex-1 rounded border border-border bg-bg-base px-2 py-1 font-mono text-[11px] text-foreground focus:border-blue-500 focus:outline-none"
+            className="flex-1 rounded border border-border bg-bg-base px-2 py-1 font-mono text-[11px] text-foreground focus:border-ring focus:outline-none"
           >
             {THEME_OPTIONS.map((t) => (
               <option key={t.value} value={t.value}>{t.label}</option>
@@ -187,7 +187,7 @@ export function PreferencesPanel({
             value={deviceCurrent}
             onChange={(e) => setDevice(e.target.value)}
             disabled={!client}
-            className="flex-1 rounded border border-border bg-bg-base px-2 py-1 font-mono text-[11px] text-foreground focus:border-blue-500 focus:outline-none disabled:opacity-50"
+            className="flex-1 rounded border border-border bg-bg-base px-2 py-1 font-mono text-[11px] text-foreground focus:border-ring focus:outline-none disabled:opacity-50"
           >
             {!deviceCurrent && (
               <option value="" disabled>
@@ -225,7 +225,7 @@ export function PreferencesPanel({
             }}
             spellCheck={false}
             placeholder="127.0.0.0"
-            className="flex-1 rounded border border-border bg-bg-base px-2 py-1 font-mono text-[11px] text-foreground focus:border-blue-500 focus:outline-none"
+            className="flex-1 rounded border border-border bg-bg-base px-2 py-1 font-mono text-[11px] text-foreground focus:border-ring focus:outline-none"
           />
           <button
             type="button"
@@ -257,7 +257,7 @@ export function PreferencesPanel({
               if (e.key === 'Escape') { setDtfDraft(dtfCurrent); }
             }}
             spellCheck={false}
-            className="flex-1 rounded border border-border bg-bg-base px-2 py-1 font-mono text-[11px] text-foreground focus:border-blue-500 focus:outline-none"
+            className="flex-1 rounded border border-border bg-bg-base px-2 py-1 font-mono text-[11px] text-foreground focus:border-ring focus:outline-none"
           />
           <button
             type="button"

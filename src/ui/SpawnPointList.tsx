@@ -264,8 +264,8 @@ export function SpawnPointList({
                           className={
                             'absolute right-0 top-0 h-full w-1 cursor-col-resize touch-none ' +
                             (h.column.getIsResizing()
-                              ? 'bg-blue-500'
-                              : 'hover:bg-blue-500/60')
+                              ? 'bg-primary'
+                              : 'hover:bg-primary/60')
                           }
                         />
                       )}

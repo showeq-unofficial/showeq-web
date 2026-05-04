@@ -49,7 +49,7 @@ export function CategorySelect({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-1.5 rounded border border-border bg-bg-base px-1.5 py-0.5 text-xs text-foreground hover:border-border focus:border-blue-500 focus:outline-none"
+        className="flex items-center gap-1.5 rounded border border-border bg-bg-base px-1.5 py-0.5 text-xs text-foreground hover:border-border focus:border-ring focus:outline-none"
       >
         <Swatch color={selected.color} />
         <span className="min-w-0 truncate">{selected.name}</span>
@@ -71,7 +71,7 @@ export function CategorySelect({
               }}
               className={
                 'flex cursor-pointer items-center gap-1.5 whitespace-nowrap px-2 py-1 text-foreground ' +
-                (o.id === value ? 'bg-blue-900/40' : 'hover:bg-bg-alt')
+                (o.id === value ? 'bg-accent text-accent-foreground' : 'hover:bg-bg-alt')
               }
             >
               <Swatch color={o.color} />

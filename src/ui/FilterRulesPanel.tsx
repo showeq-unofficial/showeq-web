@@ -81,7 +81,7 @@ export function FilterRulesPanel({
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search patterns…"
           spellCheck={false}
-          className="flex-1 rounded border border-border bg-bg-base px-2 py-1 font-mono text-[11px] text-foreground placeholder:text-muted-foreground/60 focus:border-blue-500 focus:outline-none"
+          className="flex-1 rounded border border-border bg-bg-base px-2 py-1 font-mono text-[11px] text-foreground placeholder:text-muted-foreground/60 focus:border-ring focus:outline-none"
         />
         <DiskMenu client={client} currentZone={currentZone} />
       </div>
@@ -119,7 +119,7 @@ export function FilterRulesPanel({
                     className={
                       'rounded px-1.5 text-[10px] tabular-nums ' +
                       (showFraction
-                        ? 'bg-blue-900/50 text-blue-700 dark:text-blue-200'
+                        ? 'bg-primary/20 text-foreground'
                         : total === 0
                           ? 'text-muted-foreground/60'
                           : 'bg-border text-foreground')
@@ -232,7 +232,7 @@ function RulePane({
             }}
             placeholder="pattern (e.g. Name:1-50)"
             spellCheck={false}
-            className="flex-1 rounded border border-border bg-bg-base px-2 py-1 font-mono text-[11px] text-foreground placeholder:text-muted-foreground/60 focus:border-blue-500 focus:outline-none"
+            className="flex-1 rounded border border-border bg-bg-base px-2 py-1 font-mono text-[11px] text-foreground placeholder:text-muted-foreground/60 focus:border-ring focus:outline-none"
           />
           <button
             type="button"
@@ -416,7 +416,7 @@ function RuleRow({
             }
           }}
           spellCheck={false}
-          className="flex-1 rounded border border-blue-500 bg-bg-base px-1 py-0.5 font-mono text-[11px] text-foreground focus:outline-none"
+          className="flex-1 rounded border border-ring bg-bg-base px-1 py-0.5 font-mono text-[11px] text-foreground focus:outline-none"
         />
       ) : (
         <button
@@ -432,7 +432,7 @@ function RuleRow({
         type="button"
         onClick={() => client.removeFilterRule(typeId, rule.pattern, rule.perZone)}
         title="Remove rule"
-        className="rounded px-1.5 text-[10px] text-muted-foreground hover:bg-bg-base hover:text-red-600 dark:hover:text-red-400"
+        className="rounded px-1.5 text-[10px] text-muted-foreground hover:bg-bg-base hover:text-destructive"
       >
         ×
       </button>
@@ -450,7 +450,7 @@ function ScopeBadge({
   if (perZone) {
     return (
       <span
-        className="rounded bg-blue-900/40 px-1 py-px text-[9px] uppercase tracking-wide text-blue-700 dark:text-blue-200"
+        className="rounded bg-primary/20 px-1 py-px text-[9px] uppercase tracking-wide text-foreground"
         title={`Per-zone rule for ${zoneName || 'current zone'}`}
       >
         {zoneName || 'zone'}

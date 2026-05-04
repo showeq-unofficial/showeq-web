@@ -410,8 +410,8 @@ export function SpawnList({
                           className={
                             'absolute right-0 top-0 h-full w-1 cursor-col-resize touch-none ' +
                             (h.column.getIsResizing()
-                              ? 'bg-blue-500'
-                              : 'hover:bg-blue-500/60')
+                              ? 'bg-primary'
+                              : 'hover:bg-primary/60')
                           }
                         />
                       )}
@@ -431,7 +431,7 @@ export function SpawnList({
               const stickyCell =
                 'sticky top-6 z-[1] px-1.5 py-0.5 align-middle ' +
                 (isSelected
-                  ? 'bg-blue-900/95'
+                  ? 'bg-primary/30'
                   : 'bg-bg-alt');
               return (
                 <tr
@@ -488,7 +488,7 @@ export function SpawnList({
                   className={
                     'cursor-pointer border-b border-border ' +
                     (isSelected
-                      ? 'bg-blue-900/40 hover:bg-blue-900/60'
+                      ? 'bg-primary/20 hover:bg-primary/30'
                       : filterTint
                       ? `${filterTint} hover:bg-bg-alt/60`
                       : 'hover:bg-bg-alt/60')

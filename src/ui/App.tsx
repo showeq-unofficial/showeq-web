@@ -295,7 +295,7 @@ export function App() {
             else if (e.key === 'Escape') { setUrlDraft(url); e.currentTarget.blur(); }
           }}
           spellCheck={false}
-          className="w-80 rounded border border-border bg-bg-base px-2 py-1 font-mono text-xs text-foreground focus:border-blue-500 focus:outline-none"
+          className="w-80 rounded border border-border bg-bg-base px-2 py-1 font-mono text-xs text-foreground focus:border-ring focus:outline-none"
         />
         <span className={`rounded px-2 py-0.5 text-xs ${STATUS_BADGE[status]}`}>
           {status}
@@ -305,14 +305,14 @@ export function App() {
             <button
               type="button"
               onClick={() => setFiltersOpen(true)}
-              className="flex items-center bg-primary px-2 text-xs font-medium text-primary-foreground select-none hover:bg-blue-600 focus:bg-primary focus:text-primary-foreground focus:outline-none"
+              className="flex items-center bg-primary px-2 text-xs font-medium text-primary-foreground select-none hover:bg-primary/90 focus:bg-primary focus:text-primary-foreground focus:outline-none"
             >
               Filters
             </button>
             <MenubarSeparator className="mx-0 my-0 h-auto w-px self-stretch" />
             <MenubarMenu>
               <MenubarTrigger
-                className="bg-primary text-primary-foreground text-xs hover:bg-blue-600 focus:bg-primary focus:text-primary-foreground data-[state=open]:bg-blue-600 data-[state=open]:text-primary-foreground"
+                className="bg-primary text-primary-foreground text-xs hover:bg-primary/90 focus:bg-primary focus:text-primary-foreground data-[state=open]:bg-primary/90 data-[state=open]:text-primary-foreground"
               >
                 View
               </MenubarTrigger>
@@ -332,7 +332,7 @@ export function App() {
             <MenubarSeparator className="mx-0 my-0 h-auto w-px self-stretch" />
             <MenubarMenu>
               <MenubarTrigger
-                className="bg-primary text-primary-foreground text-xs hover:bg-blue-600 focus:bg-primary focus:text-primary-foreground data-[state=open]:bg-blue-600 data-[state=open]:text-primary-foreground"
+                className="bg-primary text-primary-foreground text-xs hover:bg-primary/90 focus:bg-primary focus:text-primary-foreground data-[state=open]:bg-primary/90 data-[state=open]:text-primary-foreground"
               >
                 Options
               </MenubarTrigger>
