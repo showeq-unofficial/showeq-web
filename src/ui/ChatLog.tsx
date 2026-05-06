@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { SpawnStore } from '../state/store';
 import {
   isCombatChatColor,
@@ -13,10 +13,11 @@ export function ChatLog({ store, tick }: { store: SpawnStore; tick: number }) {
   // surfaced by CombatLog instead — keep them out of Chat to avoid the
   // double-render. The proper home for this routing is the daemon; see
   // CombatLog.tsx for the intended migration.
-  const log = useMemo(
-    () => fullLog.filter((m) => !isCombatChatColor(m.chatColor)),
-    [fullLog],
-  );
+  // No useMemo here: store.chatLog() returns the same array reference and
+  // mutates in place, so a deps=[fullLog] memo would cache the initial
+  // empty filter result forever. Filter inline (cheap; capped at
+  // CHAT_HISTORY_LIMIT entries), matching CombatLog.
+  const log = fullLog.filter((m) => !isCombatChatColor(m.chatColor));
   const overrides = useChatColorOverrides();
   const scrollRef = useRef<HTMLDivElement | null>(null);
   // Track the user's intent to stay pinned to the bottom: if they scroll
