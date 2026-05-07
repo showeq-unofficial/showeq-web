@@ -99,9 +99,13 @@ function distanceSq(a: Spawn, b: Spawn | undefined): number {
 // showeq-c spawnlist2 spinbox (showeq/src/spawnlist2.cpp:97-101) but
 // surfaced as discrete options instead of a free-form spinner so the
 // header stays compact. 5 FPM = once every 12s, 60 FPM = once a
-// second. Default 10 FPM (= every 6s) is the legacy default; on a
-// busy zone the table reorders by distance every refresh so this
-// directly controls how much main-thread work the panel does.
+// second. Default 10 FPM (= every 6s) is the legacy default. Rows are
+// sorted by distance, so this controls how often the list visibly
+// reorders as you/mobs move — low FPM = stable list (easier to click
+// a target without it swapping with a neighbor mid-click), high FPM =
+// snappy reorder. Row virtualization makes the per-tick cost flat in
+// spawn count, so this is a UX/readability dial rather than a perf
+// throttle.
 const FPM_OPTIONS = [5, 10, 15, 20, 30, 60] as const;
 const FPM_DEFAULT = 10;
 
@@ -160,10 +164,11 @@ export function SpawnList({
   const categories = categoriesState?.categories ?? [];
 
   // Per-panel refresh ticker. SpawnList does its own setInterval here
-  // rather than reading the global App tick — sorting + reconciling
-  // hundreds of rows is the most expensive panel re-render in the
-  // app, and the user should be able to dial it independently of
-  // every other panel.
+  // rather than reading the global App tick because the user-visible
+  // effect of this rate (how often distance-sorted rows shuffle) is
+  // specific to this panel — they may want a stable, slow-reordering
+  // list here while other panels stay snappy. Per-tick cost is bounded
+  // by virtualization, so this isn't a perf knob.
   const [fpm, setFpm] = useState<number>(loadFpm);
   useEffect(() => {
     localStorage.setItem('spawnlist.fpm', String(fpm));
@@ -348,7 +353,7 @@ export function SpawnList({
         <span>{rows.length} spawn{rows.length === 1 ? '' : 's'}</span>
         <label
           className="flex items-center gap-1"
-          title="Refresh rate in frames per minute (5 = every 12s, 60 = every 1s). Mirrors legacy showeq-c spawnlist2 FPM spinbox."
+          title="Distance-sort cadence in frames per minute (5 = every 12s, 60 = every 1s). Lower FPM = more stable rows; higher FPM = faster reorder. Mirrors legacy showeq-c spawnlist2 FPM spinbox."
         >
           <span className="text-muted-foreground">FPM</span>
           <select

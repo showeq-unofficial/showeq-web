@@ -368,11 +368,11 @@ export function App() {
           <PlayerPanel
             store={store}
             tick={tick}
-            onOpenSkills={() => setSkillsOpen(true)}
-            onOpenStats={() => setStatsWindowOpen(true)}
-            onOpenAA={() => setAAWindowOpen(true)}
-            onOpenLoot={() => setLootOpen(true)}
-            onOpenItems={() => setInventoryOpen(true)}
+            onOpenSkills={() => setSkillsOpen((v) => !v)}
+            onOpenStats={() => setStatsWindowOpen((v) => !v)}
+            onOpenAA={() => setAAWindowOpen((v) => !v)}
+            onOpenLoot={() => setLootOpen((v) => !v)}
+            onOpenItems={() => setInventoryOpen((v) => !v)}
           />
         );
       case 'buffs':
