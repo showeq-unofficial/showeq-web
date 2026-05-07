@@ -34,11 +34,8 @@
       "icons/icon.ico"
     ],
     "windows": {
-      "nsis": {
-        "installerMode": "portable",
-        "webviewInstallMode": {
-          "type": "embedBootstrapper"
-        }
+      "webviewInstallMode": {
+        "type": "embedBootstrapper"
       }
     }
   }

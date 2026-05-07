@@ -52,6 +52,20 @@ and the daemon doesn't terminate TLS itself. Two ways around it:
   URL). The browser sees a localhost target, so the mixed-content
   rule doesn't fire even on an HTTPS page; SSH carries the traffic.
 
+## Desktop builds
+
+Tagged releases (`v*`) publish three desktop bundles via GitHub Actions: a
+Linux AppImage, a macOS `.dmg` (aarch64), and two Windows artifacts — an NSIS
+installer and a portable `.exe` (`showeq-web-vX.Y.Z-portable-x86_64.exe`)
+cross-compiled from Linux via `cargo-xwin`.
+
+**Windows users:** Tauri renders the UI through Microsoft's WebView2 runtime.
+Windows 10 (newer builds) and Windows 11 ship it preinstalled with Edge, so
+the portable `.exe` and the NSIS installer should both run with no setup. On
+older or stripped-down Windows installs, grab the **Evergreen Bootstrapper**
+from <https://developer.microsoft.com/microsoft-edge/webview2/> first — without
+it the app launches to a blank window.
+
 ## Layout
 
 ```

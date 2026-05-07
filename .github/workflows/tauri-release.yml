@@ -18,8 +18,6 @@ jobs:
             args: ''
           - platform: macos-latest
             args: '--target aarch64-apple-darwin'
-          - platform: macos-13
-            args: '--target x86_64-apple-darwin'
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v5
@@ -31,7 +29,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ (matrix.platform == 'macos-latest' && 'aarch64-apple-darwin') || (matrix.platform == 'macos-13' && 'x86_64-apple-darwin') || '' }}
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin' || '' }}
 
       - name: Install Linux system dependencies
         if: matrix.platform == 'ubuntu-22.04'
@@ -59,3 +57,51 @@ jobs:
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
+
+  portable-windows:
+    permissions:
+      contents: write
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install Rust + Windows target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Install LLVM toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y llvm clang lld
+
+      - name: Install cargo-xwin
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-xwin
+
+      - name: Install frontend dependencies
+        run: bun install
+
+      - name: Regenerate proto bindings
+        run: bun run gen
+
+      - name: Cross-compile portable Windows exe
+        run: bun tauri build --runner cargo-xwin --target x86_64-pc-windows-msvc --no-bundle
+
+      - name: Stage release asset
+        run: |
+          cp src-tauri/target/x86_64-pc-windows-msvc/release/showeq-web.exe \
+             showeq-web-${{ github.ref_name }}-portable-x86_64.exe
+
+      - name: Upload to draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: 'showeq-web ${{ github.ref_name }}'
+          draft: true
+          files: showeq-web-${{ github.ref_name }}-portable-x86_64.exe
