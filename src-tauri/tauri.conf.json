@@ -35,7 +35,10 @@
     ],
     "windows": {
       "nsis": {
-        "installerMode": "portable"
+        "installerMode": "portable",
+        "webviewInstallMode": {
+          "type": "embedBootstrapper"
+        }
       }
     }
   }
