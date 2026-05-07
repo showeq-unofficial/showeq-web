@@ -16,3 +16,6 @@ src/gen/
 
 # tsc incremental build cache
 tsconfig.tsbuildinfo
+
+# Tauri Rust build output
+src-tauri/target/

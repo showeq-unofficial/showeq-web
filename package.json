@@ -11,7 +11,9 @@
     "typecheck": "tsc -b --noEmit",
     "smoke": "bun scripts/smoke-test.ts",
     "test": "vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "tauri:dev": "bunx tauri dev",
+    "tauri:build": "bunx tauri build"
   },
   "dependencies": {
     "@bufbuild/protobuf": "^2.2.0",
@@ -32,6 +34,8 @@
     "@bufbuild/protoc-gen-es": "^2.2.0",
     "@playwright/test": "^1.48.0",
     "@tailwindcss/vite": "^4.0.0",
+    "@tauri-apps/api": "^2.11.0",
+    "@tauri-apps/cli": "^2.11.1",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@types/ws": "^8.18.1",
