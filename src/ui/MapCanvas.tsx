@@ -24,6 +24,18 @@ const COLOR_BY_TYPE: Record<number, string> = {
 // dense spawn fields.
 const CLICK_HIT_RADIUS = 12;
 const HOVER_HIT_RADIUS = 10;
+// Zoom slider mapping: integer 0..ZOOM_STEPS log-distributed across
+// [ZOOM_MIN, ZOOM_MAX]. Integer step avoids any controlled-input
+// precision drift between value prop and the snapped DOM value.
+const ZOOM_MIN = 0.1;
+const ZOOM_MAX = 50;
+const ZOOM_STEPS = 200;
+const ZOOM_LN_MIN = Math.log(ZOOM_MIN);
+const ZOOM_LN_MAX = Math.log(ZOOM_MAX);
+const sliderToZoom = (s: number) =>
+  Math.exp(ZOOM_LN_MIN + (s / ZOOM_STEPS) * (ZOOM_LN_MAX - ZOOM_LN_MIN));
+const zoomToSlider = (z: number) =>
+  Math.round(((Math.log(z) - ZOOM_LN_MIN) / (ZOOM_LN_MAX - ZOOM_LN_MIN)) * ZOOM_STEPS);
 // Movement threshold (canvas px) below which a mouse-up after mouse-down
 // is treated as a click rather than a drag-pan.
 const DRAG_THRESHOLD = 4;
@@ -142,8 +154,31 @@ export function MapCanvas({
   useEffect(() => { onSelectRef.current = onSelect; }, [onSelect]);
 
   // Pan & zoom kept in refs so mouse events don't churn React state. The
-  // render loop reads them every frame.
-  const viewScaleRef = useRef(1);
+  // render loop reads them every frame. Zoom also surfaces as React state
+  // so the slider input can render — `setZoom` mutates ref + state in
+  // lockstep so the wheel handler can still read the previous scale
+  // synchronously between rapid trackpad events.
+  const [viewScale, setViewScale] = useState(1);
+  const viewScaleRef = useRef(viewScale);
+  const setZoom = (next: number) => {
+    const clamped = Math.max(0.1, Math.min(50, next));
+    viewScaleRef.current = clamped;
+    setViewScale(clamped);
+  };
+  // Slider zoom: scale the existing pan offset by the same ratio so the
+  // world point currently at screen-center stays at screen-center after
+  // the zoom (the wheel handler does its own cursor-anchored adjustment).
+  const setZoomAroundCenter = (next: number) => {
+    const oldScale = viewScaleRef.current;
+    const clamped = Math.max(0.1, Math.min(50, next));
+    if (oldScale > 0) {
+      const ratio = clamped / oldScale;
+      panXRef.current *= ratio;
+      panYRef.current *= ratio;
+    }
+    viewScaleRef.current = clamped;
+    setViewScale(clamped);
+  };
   const panXRef = useRef(0);
   const panYRef = useRef(0);
   const lastZoneRef = useRef('');
@@ -174,7 +209,7 @@ export function MapCanvas({
       return;
     }
     pendingCenterRef.current = selectedId;
-    if (viewScaleRef.current < 3) viewScaleRef.current = 3;
+    if (viewScaleRef.current < 3) setZoom(3);
   }, [selectedId, selectVersion]);
 
   // Visible layers — state because the toggle UI needs to re-render on
@@ -189,6 +224,14 @@ export function MapCanvas({
   useEffect(() => {
     localStorage.setItem('map.overlayCollapsed', overlayCollapsed ? '1' : '0');
   }, [overlayCollapsed]);
+  const [infoCollapsed, setInfoCollapsed] = useState<boolean>(
+    () => localStorage.getItem('map.infoCollapsed') === '1',
+  );
+  const infoCollapsedRef = useRef(infoCollapsed);
+  useEffect(() => {
+    infoCollapsedRef.current = infoCollapsed;
+    localStorage.setItem('map.infoCollapsed', infoCollapsed ? '1' : '0');
+  }, [infoCollapsed]);
   // Grid (mirrors showeq-c's MapData::paintGrid). Resolution in world
   // units — 500 matches mapcore.cpp:75. Default-on per the user request.
   const [showGrid, setShowGrid] = useState<boolean>(
@@ -235,7 +278,7 @@ export function MapCanvas({
     const z = store.zone();
     if (z === lastZoneRef.current) return;
     lastZoneRef.current = z;
-    viewScaleRef.current = 1;
+    setZoom(1);
     panXRef.current = 0;
     panYRef.current = 0;
 
@@ -354,14 +397,21 @@ export function MapCanvas({
     const onMouseLeave = () => setHover(null);
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
-      const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+      // Per-event multiplier scaled by deltaY magnitude so trackpad
+      // pinch (many small deltas) doesn't compound the way mouse wheel
+      // detents (one big delta per click) does. deltaY is normalized
+      // against a typical mouse-wheel detent (~100) and clamped so a
+      // single huge scroll burst can't blow past the bounds in one tick.
+      const norm = Math.min(1, Math.abs(e.deltaY) / 100);
+      const step = 0.1 * norm;
+      const factor = e.deltaY < 0 ? 1 + step : 1 / (1 + step);
       const oldScale = viewScaleRef.current;
       const newScale = Math.max(0.1, Math.min(50, oldScale * factor));
       // When tracking, pan is overridden every frame to pin the player —
       // cursor-anchored zoom would just flicker before the tracker wins.
       // Zoom around the player (already at canvas center) instead.
       if (trackPlayerRef.current) {
-        viewScaleRef.current = newScale;
+        setZoom(newScale);
         return;
       }
       const rect = canvas.getBoundingClientRect();
@@ -376,7 +426,7 @@ export function MapCanvas({
       const ratio = newScale / oldScale;
       panXRef.current -= offX * (ratio - 1);
       panYRef.current -= offY * (ratio - 1);
-      viewScaleRef.current = newScale;
+      setZoom(newScale);
     };
 
     canvas.addEventListener('mousedown', onMouseDown);
@@ -723,14 +773,40 @@ export function MapCanvas({
         fpsStats.lastReset = now;
       }
 
-      ctx.fillStyle = 'rgba(255,255,255,0.7)';
-      ctx.font = '12px system-ui';
-      const zoneLabel = store.zoneLongName() || store.zone() || '(none)';
-      ctx.fillText(`zone: ${zoneLabel}`, 8, 16);
-      ctx.fillText(`spawns: ${spawns.length}`, 8, 32);
-      ctx.fillText(`seq: ${store.seq()}`, 8, 48);
-      ctx.fillText(`zoom: ${viewScaleRef.current.toFixed(2)}x`, 8, 64);
-      ctx.fillText(`fps: ${fpsStats.fps.toFixed(0)}`, 8, 80);
+      if (!infoCollapsedRef.current) {
+        ctx.font = '12px system-ui';
+        const zoneLabel = store.zoneLongName() || store.zone() || '(none)';
+        const lines = [
+          `zone: ${zoneLabel}`,
+          `spawns: ${spawns.length}`,
+          `seq: ${store.seq()}`,
+          `zoom: ${viewScaleRef.current.toFixed(2)}x`,
+          `fps: ${fpsStats.fps.toFixed(0)}`,
+        ];
+        let maxW = 0;
+        for (const t of lines) {
+          const tw = ctx.measureText(t).width;
+          if (tw > maxW) maxW = tw;
+        }
+        const padX = 6;
+        const padY = 5;
+        const lineH = 16;
+        const boxX = 4;
+        const boxY = 4;
+        const boxW = Math.ceil(maxW) + padX * 2;
+        const boxH = lines.length * lineH + padY * 2;
+        ctx.fillStyle = 'rgba(15, 22, 28, 0.78)';
+        ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.roundRect(boxX, boxY, boxW, boxH, 4);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        for (let i = 0; i < lines.length; i++) {
+          ctx.fillText(lines[i], boxX + padX, boxY + padY + (i + 1) * lineH - 4);
+        }
+      }
 
       // Publish hits for hit-testing in mouse handlers. Done last so any
       // dot painted this frame is selectable on the next event.
@@ -767,7 +843,7 @@ export function MapCanvas({
   const allOff = () => setVisibleLayers(new Set());
 
   const resetView = () => {
-    viewScaleRef.current = 1;
+    setZoom(1);
     panXRef.current = 0;
     panYRef.current = 0;
   };
@@ -795,14 +871,14 @@ export function MapCanvas({
             type="button"
             onClick={() => setOverlayCollapsed((c) => !c)}
             className="text-muted-foreground hover:text-foreground"
-            title={overlayCollapsed ? 'Expand layers' : 'Collapse layers'}
-            aria-label={overlayCollapsed ? 'Expand layers' : 'Collapse layers'}
+            title={overlayCollapsed ? 'Expand view options' : 'Collapse view options'}
+            aria-label={overlayCollapsed ? 'Expand view options' : 'Collapse view options'}
           >
             {overlayCollapsed ? '▸' : '▾'}
           </button>
           {!overlayCollapsed && (
             <>
-              <span className="flex-1 font-medium text-foreground">Layers</span>
+              <span className="flex-1 font-medium text-foreground">View</span>
               <button
                 type="button"
                 onClick={resetView}
@@ -829,6 +905,20 @@ export function MapCanvas({
           />
           <span className="w-8 shrink-0 text-right tabular-nums">{fovDistance}</span>
         </label>
+        <label className="mb-2 flex items-center gap-1 text-[11px] text-muted-foreground">
+          <span className="w-7 shrink-0">Zoom</span>
+          <input
+            type="range"
+            min={0}
+            max={ZOOM_STEPS}
+            step={1}
+            value={zoomToSlider(viewScale)}
+            onChange={(e) => setZoomAroundCenter(sliderToZoom(Number(e.target.value)))}
+            onInput={(e) => setZoomAroundCenter(sliderToZoom(Number((e.target as HTMLInputElement).value)))}
+            className="flex-1 accent-blue-500"
+          />
+          <span className="w-8 shrink-0 text-right tabular-nums">{viewScale.toFixed(2)}x</span>
+        </label>
         <label className="mb-2 flex items-center gap-1 text-[11px] text-foreground">
           <span className="w-7 shrink-0 text-muted-foreground">FPS</span>
           <select
@@ -849,6 +939,15 @@ export function MapCanvas({
             className="h-3 w-3 accent-blue-500"
           />
           Grid
+        </label>
+        <label className="mb-2 flex cursor-pointer items-center gap-1 text-[11px] text-foreground">
+          <input
+            type="checkbox"
+            checked={!infoCollapsed}
+            onChange={(e) => setInfoCollapsed(!e.target.checked)}
+            className="h-3 w-3 accent-blue-500"
+          />
+          Info
         </label>
         {availableLayers.length === 0 ? (
           <div className="text-muted-foreground">no map loaded</div>
