@@ -41,6 +41,10 @@ import { FloatingWindow } from './FloatingWindow';
 import { SnapZones, type SnapHint, type SnapSide } from './SnapZones';
 import { useLayoutStore, type PanelKey } from '../state/layoutStore';
 import { usePrefsStore } from '../state/prefsStore';
+import { cueKeyForFilterFlags } from '../state/alertsStore';
+import { playFilterCue } from '../lib/audioCue';
+import { useBuffWarnings } from '../lib/useBuffWarnings';
+import { AlertsPanel } from './AlertsPanel';
 
 type ConnStatus = 'disconnected' | 'connecting' | 'connected';
 
@@ -165,6 +169,12 @@ export function App() {
     const id = setInterval(() => setTick((t) => t + 1), 1000);
     return () => clearInterval(id);
   }, []);
+
+  // Buff-fade alert ticker. Runs whether or not the Buffs panel is
+  // mounted — the daemon emits BuffsUpdate independent of UI state, so
+  // pulling this into App keeps the cue audible even with the panel
+  // hidden.
+  useBuffWarnings(store);
 
   // Convert pixel-space drag delta into a fraction of the rail's
   // current height. Reading from the DOM avoids tracking a separate
@@ -320,7 +330,17 @@ export function App() {
         }
       }
     });
-    const ws = { detach: () => { client.close(); detachEnv(); detachSelect(); } };
+    // Filter-flag-driven spawn alert sounds. `spawnAdded` is incremental
+    // — the initial Snapshot's spawns don't pass through here, so a
+    // fresh connect doesn't fire 200 cues at once. Snapshots after a
+    // mid-session reconnect skip the cues for the same reason.
+    const detachAlert = client.onEnvelope((env) => {
+      const p = env.payload;
+      if (p.case !== 'spawnAdded' || !p.value.spawn) return;
+      const cue = cueKeyForFilterFlags(p.value.spawn.filterFlags);
+      if (cue) playFilterCue(cue);
+    });
+    const ws = { detach: () => { client.close(); detachEnv(); detachSelect(); detachAlert(); } };
 
     const poll = setInterval(() => {
       const w = (client as unknown as { ws?: WebSocket }).ws;
@@ -640,6 +660,7 @@ export function App() {
         <Tabs defaultValue="preferences" className="gap-0">
           <TabsList className="sticky top-0 z-10 m-3 self-start bg-bg-panel">
             <TabsTrigger value="preferences">Preferences</TabsTrigger>
+            <TabsTrigger value="alerts">Alerts</TabsTrigger>
             <TabsTrigger value="chat-colors">Chat Colors</TabsTrigger>
           </TabsList>
           <TabsContent value="preferences">
@@ -648,6 +669,9 @@ export function App() {
               client={clientRef.current}
               tick={tick}
             />
+          </TabsContent>
+          <TabsContent value="alerts">
+            <AlertsPanel />
           </TabsContent>
           <TabsContent value="chat-colors">
             <ChatColorsPanel />
