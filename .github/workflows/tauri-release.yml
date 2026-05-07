@@ -54,8 +54,8 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'showeq-web ${{ github.ref_name }}'
-          releaseDraft: true
-          prerelease: false
+          releaseDraft: false
+          prerelease: true
           args: ${{ matrix.args }}
 
   portable-windows:
@@ -98,10 +98,10 @@ jobs:
           cp src-tauri/target/x86_64-pc-windows-msvc/release/showeq-web.exe \
              showeq-web-${{ github.ref_name }}-portable-x86_64.exe
 
-      - name: Upload to draft release
+      - name: Upload to prerelease
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           name: 'showeq-web ${{ github.ref_name }}'
-          draft: true
+          prerelease: true
           files: showeq-web-${{ github.ref_name }}-portable-x86_64.exe
