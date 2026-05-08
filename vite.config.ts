@@ -20,6 +20,9 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
   },
+  build: {
+    chunkSizeWarningLimit: 700,
+  },
   test: {
     // happy-dom is enough for store + localStorage tests; we don't
     // render React components in unit tests (the panel/drag UI lives
