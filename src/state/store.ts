@@ -4,6 +4,7 @@ import type {
   ChatMessage,
   CombatEvent,
   Envelope,
+  EqTimeSync,
   FilterRulesUpdate,
   GroupUpdate,
   Item,
@@ -14,6 +15,7 @@ import type {
   Spawn,
   SpawnPoint,
   WornSet,
+  ZoneServer,
 } from '@gen/seq/v1/events_pb';
 
 // One chat-log line: the wire ChatMessage plus the seq the daemon used,
@@ -131,6 +133,15 @@ export class SpawnStore {
   // Recomputed by the daemon and re-sent as ItemCacheTotals on each
   // worn change, alongside the WornSet event.
   private itemTotals: ItemCacheTotals | undefined;
+  // Most recent OP_TimeOfDay sync. Paired with the envelope server_ts_ms
+  // so the StatusBar can extrapolate Norrath time locally at 20× wall-
+  // clock rate without polling the daemon.
+  private eqTimeSync: EqTimeSync | undefined;
+  private eqTimeSyncServerMs = 0n;
+  // Most recent OP_ZoneServerInfo. Cleared along with the spawn map on
+  // zoneChanged so a stale endpoint doesn't linger after the next world
+  // handoff arrives (the daemon will re-emit on every handoff).
+  private zoneServer: ZoneServer | undefined;
   // Bounded ring buffers (oldest first). Growth capped at the *_LIMIT
   // constants above to prevent unbounded memory in long sessions.
   private chat: ChatEntry[] = [];
@@ -159,6 +170,11 @@ export class SpawnStore {
         for (const it of p.value.items) this.items.set(it.id, it);
         this.itemTotals = p.value.itemTotals;
         if (p.value.wornSet) this.applyWornSet(p.value.wornSet);
+        if (p.value.eqTimeSync) {
+          this.eqTimeSync = p.value.eqTimeSync;
+          this.eqTimeSyncServerMs = env.serverTsMs;
+        }
+        if (p.value.zoneServer) this.zoneServer = p.value.zoneServer;
         break;
       }
       case 'zoneChanged':
@@ -293,6 +309,13 @@ export class SpawnStore {
         }
         break;
       }
+      case 'eqTimeSync':
+        this.eqTimeSync = p.value;
+        this.eqTimeSyncServerMs = env.serverTsMs;
+        break;
+      case 'zoneServer':
+        this.zoneServer = p.value;
+        break;
       default:
         break;
     }
@@ -383,6 +406,14 @@ export class SpawnStore {
   buffsState(): BuffsUpdate | undefined { return this.buffs; }
   categoriesState(): CategoriesUpdate | undefined { return this.categories; }
   filterRulesState(): FilterRulesUpdate | undefined { return this.filterRules; }
+  // Returns the last EqTimeSync and the daemon's wall-clock at the
+  // moment of that sync (in env.server_ts_ms). The StatusBar pairs the
+  // sync's {y/m/d/h/m} with `(now - serverMs) * 20` to render a smooth
+  // local extrapolation between sync points.
+  eqTime(): { sync: EqTimeSync; serverMs: bigint } | undefined {
+    return this.eqTimeSync ? { sync: this.eqTimeSync, serverMs: this.eqTimeSyncServerMs } : undefined;
+  }
+  zoneServerInfo(): ZoneServer | undefined { return this.zoneServer; }
   pref(section: string, key: string): Pref | undefined {
     return this.prefs.get(`${section}.${key}`);
   }

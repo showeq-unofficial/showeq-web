@@ -128,17 +128,27 @@ function loadInitialPanelsLocked(): boolean {
   return localStorage.getItem('showeq.panelsLocked') === '1';
 }
 
+function loadInitialStatusBarVisible(): boolean {
+  // Default to visible — the bar carries info (zone server + EQ time)
+  // that's hard to surface elsewhere. Hide-by-default would render the
+  // first-launch experience strictly worse.
+  const raw = localStorage.getItem('showeq.statusBar');
+  return raw == null ? true : raw === '1';
+}
+
 interface LayoutState {
   visibility: Record<PanelKey, boolean>;
   dockLocation: Record<PanelKey, DockLocation>;
   panelOrder: Record<RailSide, PanelKey[]>;
   panelsLocked: boolean;
+  statusBarVisible: boolean;
   railWidths: RailWidths;
   leftSplit: number;
 
   togglePanel: (k: PanelKey) => void;
   hidePanel: (k: PanelKey) => void;
   setPanelsLocked: (v: boolean) => void;
+  setStatusBarVisible: (v: boolean) => void;
   setLeftRailWidth: (dx: number) => void;
   setRightRailWidth: (dx: number) => void;
   setLeftSplit: (updater: (prev: number) => number) => void;
@@ -175,6 +185,7 @@ export const useLayoutStore = create<LayoutState>()(
       dockLocation: loadInitialDockLocation(),
       panelOrder:   loadInitialPanelOrder(),
       panelsLocked: loadInitialPanelsLocked(),
+      statusBarVisible: loadInitialStatusBarVisible(),
       railWidths:   loadInitialRailWidths(),
       leftSplit:    loadInitialLeftSplit(),
 
@@ -183,6 +194,7 @@ export const useLayoutStore = create<LayoutState>()(
       hidePanel: (k) =>
         set((s) => ({ visibility: { ...s.visibility, [k]: false } })),
       setPanelsLocked: (v) => set({ panelsLocked: v }),
+      setStatusBarVisible: (v) => set({ statusBarVisible: v }),
       setLeftRailWidth: (dx) =>
         set((s) => ({ railWidths: { ...s.railWidths, left: clampRail(s.railWidths.left + dx) } })),
       setRightRailWidth: (dx) =>
@@ -254,6 +266,7 @@ export const useLayoutStore = create<LayoutState>()(
         dockLocation: state.dockLocation,
         panelOrder: state.panelOrder,
         panelsLocked: state.panelsLocked,
+        statusBarVisible: state.statusBarVisible,
         railWidths: state.railWidths,
         leftSplit: state.leftSplit,
       }),

@@ -35,6 +35,7 @@ import { LootWindow } from './LootWindow';
 import { AAWindow } from './AAWindow';
 import { SkillsWindow } from './SkillsWindow';
 import { StatsWindow } from './StatsWindow';
+import { StatusBar } from './StatusBar';
 import { InventoryStatsPanel } from './InventoryStatsPanel';
 import { VerticalResizeHandle } from './VerticalResizeHandle';
 import { FloatingWindow } from './FloatingWindow';
@@ -117,11 +118,13 @@ export function App() {
   const dockLocation = useLayoutStore((s) => s.dockLocation);
   const panelOrder   = useLayoutStore((s) => s.panelOrder);
   const panelsLocked = useLayoutStore((s) => s.panelsLocked);
+  const statusBarVisible = useLayoutStore((s) => s.statusBarVisible);
   const railWidths   = useLayoutStore((s) => s.railWidths);
   const leftSplit    = useLayoutStore((s) => s.leftSplit);
   const togglePanel       = useLayoutStore((s) => s.togglePanel);
   const hidePanel         = useLayoutStore((s) => s.hidePanel);
   const setPanelsLocked   = useLayoutStore((s) => s.setPanelsLocked);
+  const setStatusBarVisible = useLayoutStore((s) => s.setStatusBarVisible);
   const setLeftRailWidth  = useLayoutStore((s) => s.setLeftRailWidth);
   const setRightRailWidth = useLayoutStore((s) => s.setRightRailWidth);
   const setLeftSplit      = useLayoutStore((s) => s.setLeftSplit);
@@ -453,6 +456,13 @@ export function App() {
                 ))}
                 <MenubarSeparator />
                 <MenubarCheckboxItem
+                  checked={statusBarVisible}
+                  onCheckedChange={setStatusBarVisible}
+                  onSelect={(e) => e.preventDefault()}
+                >
+                  Status bar
+                </MenubarCheckboxItem>
+                <MenubarCheckboxItem
                   checked={panelsLocked}
                   onCheckedChange={setPanelsLocked}
                   onSelect={(e) => e.preventDefault()}
@@ -593,6 +603,7 @@ export function App() {
           </>
         )}
       </div>
+      {statusBarVisible && <StatusBar store={store} tick={tick} />}
       {skillsOpen && (
         <SkillsWindow
           store={store}
