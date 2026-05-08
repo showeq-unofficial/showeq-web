@@ -150,6 +150,7 @@ export function SpawnList({
   // is non-empty by default.
   const [categoryFilter, setCategoryFilter] = useState<number>(-1);
   const [hideFiltered, setHideFiltered] = useState(true);
+  const [nameFilter, setNameFilter] = useState('');
   // Row tints (Hunt/Caution/Danger/etc. backgrounds) are on by default.
   // Persisted because the preference is per-user, not per-session.
   const [rowTints, setRowTints] = useState<boolean>(
@@ -189,6 +190,7 @@ export function SpawnList({
     // but never resends the player's Spawn record, so Spawn.level is frozen
     // at zone-in and con colors would otherwise drift after a ding.
     const pLevel = store.stats()?.level ?? player?.level ?? 0;
+    const needle = nameFilter.trim().toLowerCase();
     const out: Row[] = [];
     for (const s of store.all()) {
       if (player && s.id === player.id) continue;
@@ -196,6 +198,10 @@ export function SpawnList({
       if (hideFiltered && (s.filterFlags & FILTERED_BIT) !== 0) continue;
       if (categoryFilter >= 0 &&
           !s.categoryIds.includes(categoryFilter)) continue;
+      if (needle) {
+        const hay = `${s.name ?? ''} ${s.lastName ?? ''}`.toLowerCase();
+        if (!hay.includes(needle)) continue;
+      }
       const d2 = player && s.id !== player.id ? distanceSq(s, player) : 0;
       const hpPct = s.hpMax > 0 ? (s.hpCur / s.hpMax) * 100 : -1;
       // Match showeq-c spawnlistcommon.cpp:196 format: append the
@@ -215,7 +221,7 @@ export function SpawnList({
       });
     }
     return out;
-  }, [store, categoryFilter, hideFiltered, localTick]);
+  }, [store, categoryFilter, hideFiltered, nameFilter, localTick]);
 
   // Player row is rendered separately so it stays pinned at the top of
   // the table regardless of sort and scroll position. HP comes from
@@ -348,6 +354,27 @@ export function SpawnList({
           />
           Tints
         </label>
+        <div className="ml-auto flex items-center gap-1">
+          <input
+            type="text"
+            value={nameFilter}
+            onChange={(e) => setNameFilter(e.target.value)}
+            placeholder="Filter name…"
+            aria-label="Filter spawn list by name"
+            className="w-32 rounded border border-border bg-bg-alt px-1.5 py-0.5 text-[11px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+          {nameFilter && (
+            <button
+              type="button"
+              onClick={() => setNameFilter('')}
+              aria-label="Clear filter"
+              title="Clear filter"
+              className="rounded px-1 text-muted-foreground hover:text-foreground"
+            >
+              ×
+            </button>
+          )}
+        </div>
       </div>
       <div className="flex items-center justify-between gap-2 border-b border-border px-2 py-1 text-[11px] text-muted-foreground">
         <span>{rows.length} spawn{rows.length === 1 ? '' : 's'}</span>
