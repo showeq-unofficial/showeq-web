@@ -60,6 +60,27 @@ const STATUS_BADGE: Record<ConnStatus, string> = {
 const DEFAULT_WS_SCHEME = window.location.protocol === 'https:' ? 'wss' : 'ws';
 const DEFAULT_URL = `${DEFAULT_WS_SCHEME}://localhost:9090`;
 const URL_STORAGE_KEY = 'showeq.daemonUrl';
+const URL_HISTORY_KEY = 'showeq.daemonUrlHistory';
+// Cap the history at a small N — this is a "did the daemon move?"
+// convenience picker, not a long-term log. The UI gets unwieldy past
+// a dozen entries anyway.
+const URL_HISTORY_MAX = 10;
+
+function loadUrlHistory(): string[] {
+  try {
+    const raw = localStorage.getItem(URL_HISTORY_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((v): v is string => typeof v === 'string').slice(0, URL_HISTORY_MAX);
+  } catch {
+    return [];
+  }
+}
+
+function saveUrlHistory(list: string[]): void {
+  try { localStorage.setItem(URL_HISTORY_KEY, JSON.stringify(list)); } catch { /* ignore */ }
+}
 
 const PANEL_DEFS: { key: PanelKey; label: string }[] = [
   { key: 'spawns',      label: 'Spawns'  },
@@ -106,6 +127,11 @@ export function App() {
   const [status, setStatus] = useState<ConnStatus>('disconnected');
   const [url, setUrl] = useState(() => localStorage.getItem(URL_STORAGE_KEY) || DEFAULT_URL);
   const [urlDraft, setUrlDraft] = useState(url);
+  const [urlHistory, setUrlHistory] = useState<string[]>(loadUrlHistory);
+  // Don't promote a URL to history until the WebSocket actually opens.
+  // Tracks the previous status so we only fire on the rising edge of
+  // a connect — disconnected/connecting → connected.
+  const prevStatusRef = useRef<ConnStatus>(status);
   // Coarse tick so panels re-render even though the store mutates in
   // place. MapCanvas drives its own rAF loop independently.
   const [tick, setTick] = useState(0);
@@ -172,6 +198,19 @@ export function App() {
     const id = setInterval(() => setTick((t) => t + 1), 1000);
     return () => clearInterval(id);
   }, []);
+
+  // Promote the active URL to history on the rising edge of a connect.
+  // Anything typed-but-never-opened stays out of the suggestions list.
+  useEffect(() => {
+    const prev = prevStatusRef.current;
+    prevStatusRef.current = status;
+    if (status !== 'connected' || prev === 'connected') return;
+    setUrlHistory((cur) => {
+      const next = [url, ...cur.filter((u) => u !== url)].slice(0, URL_HISTORY_MAX);
+      saveUrlHistory(next);
+      return next;
+    });
+  }, [status, url]);
 
   // Buff-fade alert ticker. Runs whether or not the Buffs panel is
   // mounted — the daemon emits BuffsUpdate independent of UI state, so
@@ -421,9 +460,13 @@ export function App() {
             if (e.key === 'Enter') { e.currentTarget.blur(); }
             else if (e.key === 'Escape') { setUrlDraft(url); e.currentTarget.blur(); }
           }}
+          list="showeq-daemon-url-history"
           spellCheck={false}
           className="w-80 rounded border border-border bg-bg-base px-2 py-1 font-mono text-xs text-foreground focus:border-ring focus:outline-none"
         />
+        <datalist id="showeq-daemon-url-history">
+          {urlHistory.map((u) => <option key={u} value={u} />)}
+        </datalist>
         <span className={`rounded px-2 py-0.5 text-xs ${STATUS_BADGE[status]}`}>
           {status}
         </span>
@@ -603,7 +646,7 @@ export function App() {
           </>
         )}
       </div>
-      {statusBarVisible && <StatusBar store={store} tick={tick} />}
+      {statusBarVisible && <StatusBar store={store} client={clientRef.current} tick={tick} />}
       {skillsOpen && (
         <SkillsWindow
           store={store}

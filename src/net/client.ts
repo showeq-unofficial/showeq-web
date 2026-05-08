@@ -100,6 +100,18 @@ export class SeqClient {
     this.ws?.close();
   }
 
+  // Coarse view of the underlying socket for UI status display.
+  // 'closed' covers both the no-socket-yet and gave-up cases; the
+  // reconnect loop blurs them on its own.
+  state(): 'open' | 'connecting' | 'closed' {
+    if (!this.ws) return 'closed';
+    switch (this.ws.readyState) {
+      case WebSocket.OPEN: return 'open';
+      case WebSocket.CONNECTING: return 'connecting';
+      default: return 'closed';
+    }
+  }
+
   onEnvelope(fn: EnvelopeListener): () => void {
     this.listeners.add(fn);
     return () => { this.listeners.delete(fn); };
