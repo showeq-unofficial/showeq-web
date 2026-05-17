@@ -8,6 +8,7 @@ import {
   RemoveFilterRuleSchema,
   RenameSpawnPointSchema,
   SaveFiltersSchema,
+  SetActiveBoxSchema,
   SetPrefSchema,
   SubscribeSchema,
   Topic,
@@ -248,6 +249,20 @@ export class SeqClient {
       payload: {
         case: 'listDevices',
         value: create(ListDevicesSchema, {}),
+      },
+    });
+    this.send(env);
+  }
+
+  // Multibox: ask the daemon to switch its active decode target to
+  // `boxId`. The daemon replies (broadcasts) a BoxListUpdated with the
+  // new active_box_id. v1 (Stage 4 of MULTIBOX_PLAN.md) is cosmetic —
+  // the daemon's decode pipeline doesn't fan out per box yet.
+  setActiveBox(boxId: string): void {
+    const env = create(ClientEnvelopeSchema, {
+      payload: {
+        case: 'setActiveBox',
+        value: create(SetActiveBoxSchema, { boxId }),
       },
     });
     this.send(env);

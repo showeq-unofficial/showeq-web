@@ -18,6 +18,7 @@ import {
 import { ChatColorsPanel } from './ChatColorsPanel';
 import { SeqClient } from '../net/client';
 import { SpawnStore } from '../state/store';
+import { BoxPicker } from './BoxPicker';
 import { BuffsPanel } from './BuffsPanel';
 import { ChatLog } from './ChatLog';
 import { CombatLog } from './CombatLog';
@@ -41,6 +42,7 @@ import { VerticalResizeHandle } from './VerticalResizeHandle';
 import { FloatingWindow } from './FloatingWindow';
 import { SnapZones, type SnapHint, type SnapSide } from './SnapZones';
 import { useLayoutStore, type PanelKey } from '../state/layoutStore';
+import { useBoxStore } from '../state/boxStore';
 import { usePrefsStore } from '../state/prefsStore';
 import { cueKeyForFilterFlags } from '../state/alertsStore';
 import { playFilterCue } from '../lib/audioCue';
@@ -382,7 +384,23 @@ export function App() {
       const cue = cueKeyForFilterFlags(p.value.spawn.filterFlags);
       if (cue) playFilterCue(cue);
     });
-    const ws = { detach: () => { client.close(); detachEnv(); detachSelect(); detachAlert(); } };
+    // Multibox: daemon broadcasts BoxListUpdated as its BoxRegistry
+    // changes (Stage 4 of ../showeq-daemon/docs/MULTIBOX_PLAN.md).
+    // Mirror into useBoxStore so the header picker renders.
+    const detachBoxes = client.onEnvelope((env) => {
+      const p = env.payload;
+      if (p.case !== 'boxListUpdated') return;
+      useBoxStore.getState().setBoxes(
+        p.value.boxes.map((b) => ({
+          boxId:       b.boxId,
+          displayName: b.displayName,
+          clientIp:    b.clientIp,
+          packetCount: b.packetCount,
+        })),
+        p.value.activeBoxId,
+      );
+    });
+    const ws = { detach: () => { client.close(); detachEnv(); detachSelect(); detachAlert(); detachBoxes(); } };
 
     const poll = setInterval(() => {
       const w = (client as unknown as { ws?: WebSocket }).ws;
@@ -470,6 +488,9 @@ export function App() {
         <span className={`rounded px-2 py-0.5 text-xs ${STATUS_BADGE[status]}`}>
           {status}
         </span>
+        <BoxPicker
+          onChange={(boxId) => clientRef.current?.setActiveBox(boxId)}
+        />
         <div className="ml-auto flex items-center gap-2">
           <Menubar className="h-6">
             <button
