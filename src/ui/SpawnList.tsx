@@ -27,6 +27,9 @@ type Row = {
   conColor: string;
   filterFlags: number;
   type: number;
+  // TLP mob-lock / FTE: true = locked/unattackable (claimed by another player
+  // or the brief post-spawn grey window). Always false on standard Live.
+  locked: boolean;
 };
 
 const columnHelper = createColumnHelper<Row>();
@@ -48,7 +51,16 @@ const columns = [
   }),
   columnHelper.accessor('name', {
     header: 'Name',
-    cell: (info) => info.getValue(),
+    cell: (info) => (
+      <span className="flex items-center gap-1">
+        {info.row.original.locked && (
+          <span title="Locked — claimed by another player (unattackable)" aria-label="locked">
+            🔒
+          </span>
+        )}
+        <span className="truncate">{info.getValue()}</span>
+      </span>
+    ),
   }),
   columnHelper.accessor('level', {
     header: 'Lvl',
@@ -218,6 +230,7 @@ export function SpawnList({
         conColor: conHex(conOf(pLevel, s.level)),
         filterFlags: s.filterFlags,
         type: s.type,
+        locked: s.locked ?? false,
       });
     }
     return out;
@@ -247,6 +260,7 @@ export function SpawnList({
       conColor: conHex(conOf(lvl, lvl)),
       filterFlags: player.filterFlags,
       type: player.type,
+      locked: false,
     };
   }, [store, localTick]);
 
@@ -519,6 +533,9 @@ export function SpawnList({
                   style={{ height: ROW_HEIGHT }}
                   className={
                     'cursor-pointer border-b border-border ' +
+                    // Locked/unattackable mobs (TLP) render dimmed, mirroring
+                    // the in-game greyed name.
+                    (r.original.locked ? 'opacity-50 ' : '') +
                     (isSelected
                       ? 'bg-primary/20 hover:bg-primary/30'
                       : filterTint
