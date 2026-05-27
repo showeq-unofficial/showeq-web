@@ -17,6 +17,16 @@ import { classNameOf } from './classes';
 import { conHex, conOf } from './concolor';
 import { tintForFilterFlags } from './filterflags';
 
+// Lets row/cell renderers know the current selection (which tracks the
+// in-game target when selectOnTarget is on) so a locked mob you're engaged
+// with isn't shown as unattackable — you can attack your own target.
+declare module '@tanstack/react-table' {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  interface TableMeta<TData> {
+    selectedId: number | null;
+  }
+}
+
 type Row = {
   id: number;
   name: string;
@@ -51,16 +61,21 @@ const columns = [
   }),
   columnHelper.accessor('name', {
     header: 'Name',
-    cell: (info) => (
-      <span className="flex items-center gap-1">
-        {info.row.original.locked && (
-          <span title="Locked — claimed by another player (unattackable)" aria-label="locked">
-            🔒
-          </span>
-        )}
-        <span className="truncate">{info.getValue()}</span>
-      </span>
-    ),
+    cell: (info) => {
+      // Your own target (selection tracks the in-game target) is attackable
+      // even when the lock flag is set, so don't badge it as locked.
+      const isTarget = info.table.options.meta?.selectedId === info.row.original.id;
+      return (
+        <span className="flex items-center gap-1">
+          {info.row.original.locked && !isTarget && (
+            <span title="Locked — claimed by another player (unattackable)" aria-label="locked">
+              🔒
+            </span>
+          )}
+          <span className="truncate">{info.getValue()}</span>
+        </span>
+      );
+    },
   }),
   columnHelper.accessor('level', {
     header: 'Lvl',
@@ -267,6 +282,7 @@ export function SpawnList({
   const table = useReactTable({
     data: rows,
     columns,
+    meta: { selectedId },
     state: { sorting, columnSizing },
     onSortingChange: setSorting,
     onColumnSizingChange: setColumnSizing,
@@ -534,8 +550,9 @@ export function SpawnList({
                   className={
                     'cursor-pointer border-b border-border ' +
                     // Locked/unattackable mobs (TLP) render dimmed, mirroring
-                    // the in-game greyed name.
-                    (r.original.locked ? 'opacity-50 ' : '') +
+                    // the in-game greyed name — except your own target, which
+                    // you can attack even while it's locked to you.
+                    (r.original.locked && !isSelected ? 'opacity-50 ' : '') +
                     (isSelected
                       ? 'bg-primary/20 hover:bg-primary/30'
                       : filterTint
