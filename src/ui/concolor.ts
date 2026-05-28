@@ -38,8 +38,13 @@ const CON_HEX: Record<Con, string> = {
 function conRanges(level: number): { grayRange: number; greenRange: number } {
   if (level < 15) return { grayRange: -6,  greenRange: -14 };
   if (level < 17) return { grayRange: -7,  greenRange: -5  };
-  if (level < 21) return { grayRange: -8,  greenRange: -6  };
-  if (level < 25) return { grayRange: -9,  greenRange: -7  };
+  // 17-20: live shows grey up to level-7 (e.g. at L18, 11 cons grey and 12
+  // green). The legacy fillConTable used -8 here, which greyed only up to
+  // level-8 (L18 → 11 green); corrected to -7 against the live client.
+  if (level < 21) return { grayRange: -7,  greenRange: -6  };
+  // 21-24: same off-by-one — live greys to level-8 (at L21, 13 cons grey, 14
+  // green). Legacy used -9 (L21 → 13 green); corrected to -8.
+  if (level < 25) return { grayRange: -8,  greenRange: -7  };
   if (level < 29) return { grayRange: -10, greenRange: -8  };
   if (level < 33) return { grayRange: -11, greenRange: -9  };
   if (level < 37) return { grayRange: -13, greenRange: -10 };

@@ -33,6 +33,25 @@ describe('conOf', () => {
     expect(conOf(8, 8)).toBe('white');
   });
 
+  // Live-verified at level 18: grey reaches up to level-7 (11) and green is
+  // the single level just above it (12). The legacy table greyed only to
+  // level-8 here, mis-coloring 11 as green.
+  it('greys up to level-7 at level 18 (live-verified)', () => {
+    expect(conOf(18, 10)).toBe('gray');
+    expect(conOf(18, 11)).toBe('gray');
+    expect(conOf(18, 12)).toBe('green');
+    expect(conOf(18, 13)).toBe('blue');
+  });
+
+  // Live-verified at level 21: grey reaches up to level-8 (13), green 14.
+  it('greys up to level-8 at level 21 (live-verified)', () => {
+    expect(conOf(21, 12)).toBe('gray');
+    expect(conOf(21, 13)).toBe('gray');
+    expect(conOf(21, 14)).toBe('green');
+    expect(conOf(21, 15)).toBe('cyan'); // delta -6, light blue
+    expect(conOf(21, 16)).toBe('blue'); // delta -5, dark blue
+  });
+
   // By level 57+ the table reaches the uncompressed flat formula:
   //   <= -21 grey, -16..-20 green, -6..-15 light blue, -1..-5 dark blue.
   it('shows the full uncompressed bands at level 60', () => {

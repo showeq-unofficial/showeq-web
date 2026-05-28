@@ -273,6 +273,37 @@ export function MapCanvas({
     localStorage.setItem('map.fpsCap', String(fpsCap));
   }, [fpsCap]);
 
+  // Height filter — mirrors the EQ in-game map's height filter: when on, hide
+  // map geometry, locations, and spawns whose Z falls outside a band centered
+  // on the player (`above` units up, `below` units down, set separately). The
+  // band needs the player's Z to anchor, so it's inert until the player is
+  // known. Defaults to 10/10 (matching the in-game default applied on enable).
+  const [heightFilter, setHeightFilter] = useState<boolean>(
+    () => localStorage.getItem('map.heightFilter') === '1',
+  );
+  const heightFilterRef = useRef(heightFilter);
+  useEffect(() => {
+    heightFilterRef.current = heightFilter;
+    localStorage.setItem('map.heightFilter', heightFilter ? '1' : '0');
+  }, [heightFilter]);
+  const readHeight = (key: string) => {
+    const raw = localStorage.getItem(key);
+    const n = raw == null ? 10 : Number(raw);
+    return Number.isFinite(n) && n >= 0 ? n : 10;
+  };
+  const [heightAbove, setHeightAbove] = useState<number>(() => readHeight('map.heightAbove'));
+  const heightAboveRef = useRef(heightAbove);
+  useEffect(() => {
+    heightAboveRef.current = heightAbove;
+    localStorage.setItem('map.heightAbove', String(heightAbove));
+  }, [heightAbove]);
+  const [heightBelow, setHeightBelow] = useState<number>(() => readHeight('map.heightBelow'));
+  const heightBelowRef = useRef(heightBelow);
+  useEffect(() => {
+    heightBelowRef.current = heightBelow;
+    localStorage.setItem('map.heightBelow', String(heightBelow));
+  }, [heightBelow]);
+
   // Detect zone change → reset view + show all layers in the new geometry.
   useEffect(() => {
     const z = store.zone();
@@ -489,6 +520,16 @@ export function MapCanvas({
       const player = store.player();
       const visible = visibleLayersRef.current;
 
+      // Height-filter band, anchored on the player's Z. Z is raw EQ height
+      // (not negated like X/Y; see protoencoder fillPos), so larger Z is up.
+      // Inert with no player Z; when off, the infinite band makes inBand a
+      // no-op so callers can stay branch-light.
+      const playerZ = player?.pos?.z;
+      const heightOn = heightFilterRef.current && playerZ != null;
+      const zMin = heightOn ? playerZ - heightBelowRef.current : -Infinity;
+      const zMax = heightOn ? playerZ + heightAboveRef.current : Infinity;
+      const inBand = (z: number) => z >= zMin && z <= zMax;
+
       // Refresh smoother against the latest store state — adds new ids,
       // retargets moved ids, prunes removed ids. `pos` may be missing on
       // a freshly-spawned record before the first OP_ClientUpdate (rare
@@ -612,6 +653,27 @@ export function MapCanvas({
           const n = line.x.length;
           if (n < 2) continue;
           ctx.strokeStyle = line.color || '#4a6070';
+          const zlen = line.z.length;
+          // Per-point Z (M-lines, zlen === n): break the polyline wherever it
+          // leaves the band so only the in-band portion draws.
+          if (heightOn && zlen >= 2) {
+            ctx.beginPath();
+            let penDown = false;
+            for (let i = 0; i < n; i++) {
+              if (inBand(line.z[i])) {
+                const [px, py] = project(line.x[i], line.y[i]);
+                if (penDown) ctx.lineTo(px, py);
+                else { ctx.moveTo(px, py); penDown = true; }
+              } else {
+                penDown = false;
+              }
+            }
+            ctx.stroke();
+            continue;
+          }
+          // Single shared Z (L-lines, zlen === 1): whole line in or out. Lines
+          // with no Z (zlen === 0) carry no height info and always draw.
+          if (heightOn && zlen === 1 && !inBand(line.z[0])) continue;
           ctx.beginPath();
           const [sx, sy] = project(line.x[0], line.y[0]);
           ctx.moveTo(sx, sy);
@@ -625,6 +687,8 @@ export function MapCanvas({
         ctx.font = '10px system-ui';
         for (const loc of geom.locations) {
           if (!visible.has(loc.layer)) continue;
+          // Locations without a valid Z carry no height info → always show.
+          if (heightOn && loc.zValid && !inBand(loc.z)) continue;
           const [lx, ly] = project(loc.x, loc.y);
           ctx.fillStyle = loc.color || 'rgba(255,255,255,0.5)';
           ctx.fillText(loc.name, lx + 3, ly);
@@ -642,6 +706,12 @@ export function MapCanvas({
       let selectedScreen: { x: number; y: number } | null = null;
       for (const s of spawns) {
         if (s.id === player?.id) continue;
+        // Height filter: drop out-of-band spawns from the draw and from
+        // hit-testing (this precedes the hits.push below). The selected spawn
+        // always pierces the filter so its dot + the magenta line stay visible
+        // even on another floor. Spawns without a position can't be filtered
+        // by Z, so they fall through unchanged.
+        if (heightOn && s.pos && s.id !== selId && !inBand(s.pos.z)) continue;
         const sp = smoothedPos(s.id, s.pos ?? { x: 0, y: 0 });
         const [px, py] = project(sp.x, sp.y);
         hits.push({ id: s.id, x: px, y: py });
@@ -949,6 +1019,50 @@ export function MapCanvas({
           />
           Info
         </label>
+        <div className="mb-2 border-t border-border pt-1.5">
+          <label className="mb-1 flex cursor-pointer items-center gap-1 text-[11px] text-foreground">
+            <input
+              type="checkbox"
+              checked={heightFilter}
+              onChange={(e) => {
+                const on = e.target.checked;
+                setHeightFilter(on);
+                // Match the in-game behavior of defaulting a fresh filter to
+                // 10 each way; leave non-zero values the user already set.
+                if (on) {
+                  if (!(heightAbove > 0)) setHeightAbove(10);
+                  if (!(heightBelow > 0)) setHeightBelow(10);
+                }
+              }}
+              className="h-3 w-3 accent-blue-500"
+            />
+            Height filter
+          </label>
+          {heightFilter && (
+            <div className="flex gap-2 pl-4">
+              <label className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                <span>Above</span>
+                <input
+                  type="number"
+                  min={0}
+                  value={heightAbove}
+                  onChange={(e) => setHeightAbove(Math.max(0, Number(e.target.value)))}
+                  className="w-12 rounded border border-border bg-bg-alt px-1 py-0.5 text-right tabular-nums text-foreground"
+                />
+              </label>
+              <label className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                <span>Below</span>
+                <input
+                  type="number"
+                  min={0}
+                  value={heightBelow}
+                  onChange={(e) => setHeightBelow(Math.max(0, Number(e.target.value)))}
+                  className="w-12 rounded border border-border bg-bg-alt px-1 py-0.5 text-right tabular-nums text-foreground"
+                />
+              </label>
+            </div>
+          )}
+        </div>
         {availableLayers.length === 0 ? (
           <div className="text-muted-foreground">no map loaded</div>
         ) : (
