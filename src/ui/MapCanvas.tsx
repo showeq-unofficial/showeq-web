@@ -706,6 +706,13 @@ export function MapCanvas({
       let selectedScreen: { x: number; y: number } | null = null;
       for (const s of spawns) {
         if (s.id === player?.id) continue;
+        // Doors and ground drops are scenery, not actors — rendering them
+        // as dots clutters the map with non-actionable noise (a zone like
+        // PoK has dozens of teleport doors). SpawnList already hard-filters
+        // both for the same reason. Pierce on selection so an in-game
+        // /target on a door still surfaces here.
+        if ((s.type === SpawnType.DOOR || s.type === SpawnType.DROP) &&
+            s.id !== selId) continue;
         // Height filter: drop out-of-band spawns from the draw and from
         // hit-testing (this precedes the hits.push below). The selected spawn
         // always pierces the filter so its dot + the magenta line stay visible
