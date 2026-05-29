@@ -10,8 +10,8 @@ import {
 } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { Spawn } from '@gen/seq/v1/events_pb';
-import { SpawnType } from '@gen/seq/v1/events_pb';
 import type { SpawnStore } from '../state/store';
+import { useSpawnFilterStore, passesSpawnFilter } from '../state/spawnFilterStore';
 import { CategorySelect } from './CategorySelect';
 import { classNameOf } from './classes';
 import { conHex, conOf } from './concolor';
@@ -147,10 +147,14 @@ export function SpawnList({
   // CategoryMgr category id (= index into the latest CategoriesUpdate)
   // that the spawn must match. Matches the showeq-c spawnlist2 category-
   // combo UX directly; user categories ship from seqdef.xml so the list
-  // is non-empty by default.
-  const [categoryFilter, setCategoryFilter] = useState<number>(-1);
-  const [hideFiltered, setHideFiltered] = useState(true);
-  const [nameFilter, setNameFilter] = useState('');
+  // is non-empty by default. Shared with MapCanvas via spawnFilterStore
+  // so map dots mirror list rows.
+  const categoryFilter = useSpawnFilterStore((s) => s.categoryFilter);
+  const setCategoryFilter = useSpawnFilterStore((s) => s.setCategoryFilter);
+  const hideFiltered = useSpawnFilterStore((s) => s.hideFiltered);
+  const setHideFiltered = useSpawnFilterStore((s) => s.setHideFiltered);
+  const nameFilter = useSpawnFilterStore((s) => s.nameFilter);
+  const setNameFilter = useSpawnFilterStore((s) => s.setNameFilter);
   // Row tints (Hunt/Caution/Danger/etc. backgrounds) are on by default.
   // Persisted because the preference is per-user, not per-session.
   const [rowTints, setRowTints] = useState<boolean>(
@@ -160,7 +164,6 @@ export function SpawnList({
     setRowTints(v);
     localStorage.setItem('spawnlist.rowTints', v ? '1' : '0');
   };
-  const FILTERED_BIT = 1 << 5;
   const categoriesState = store.categoriesState();
   const categories = categoriesState?.categories ?? [];
 
@@ -190,18 +193,11 @@ export function SpawnList({
     // but never resends the player's Spawn record, so Spawn.level is frozen
     // at zone-in and con colors would otherwise drift after a ding.
     const pLevel = store.stats()?.level ?? player?.level ?? 0;
-    const needle = nameFilter.trim().toLowerCase();
+    const filterState = { categoryFilter, hideFiltered, nameFilter };
     const out: Row[] = [];
     for (const s of store.all()) {
       if (player && s.id === player.id) continue;
-      if (s.type === SpawnType.DOOR || s.type === SpawnType.DROP) continue;
-      if (hideFiltered && (s.filterFlags & FILTERED_BIT) !== 0) continue;
-      if (categoryFilter >= 0 &&
-          !s.categoryIds.includes(categoryFilter)) continue;
-      if (needle) {
-        const hay = `${s.name ?? ''} ${s.lastName ?? ''}`.toLowerCase();
-        if (!hay.includes(needle)) continue;
-      }
+      if (!passesSpawnFilter(s, filterState)) continue;
       const d2 = player && s.id !== player.id ? distanceSq(s, player) : 0;
       const hpPct = s.hpMax > 0 ? (s.hpCur / s.hpMax) * 100 : -1;
       // Match showeq-c spawnlistcommon.cpp:196 format: append the

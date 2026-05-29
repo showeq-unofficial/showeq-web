@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { SpawnStore } from '../state/store';
 import { SpawnType } from '@gen/seq/v1/events_pb';
+import { useSpawnFilterStore, passesSpawnFilter } from '../state/spawnFilterStore';
 import { classNameOf } from './classes';
 import { conHex, conOf } from './concolor';
 
@@ -272,6 +273,18 @@ export function MapCanvas({
     fpsCapRef.current = fpsCap;
     localStorage.setItem('map.fpsCap', String(fpsCap));
   }, [fpsCap]);
+
+  // Spawn-list filter mirror: SpawnList's category / hide-filtered / name
+  // filter is shared via spawnFilterStore. MapCanvas applies the same
+  // predicate so dots track rows. No selection-pierce — when the user
+  // filters something out, it stays hidden even if it's the current
+  // selection. The render loop reads via refs so filter toggles don't
+  // restart the rAF (same pattern as showGridRef/fpsCapRef).
+  const spawnFilter = useSpawnFilterStore();
+  const spawnFilterRef = useRef(spawnFilter);
+  useEffect(() => {
+    spawnFilterRef.current = spawnFilter;
+  }, [spawnFilter]);
 
   // Height filter — mirrors the EQ in-game map's height filter: when on, hide
   // map geometry, locations, and spawns whose Z falls outside a band centered
@@ -706,13 +719,12 @@ export function MapCanvas({
       let selectedScreen: { x: number; y: number } | null = null;
       for (const s of spawns) {
         if (s.id === player?.id) continue;
-        // Doors and ground drops are scenery, not actors — rendering them
-        // as dots clutters the map with non-actionable noise (a zone like
-        // PoK has dozens of teleport doors). SpawnList already hard-filters
-        // both for the same reason. Pierce on selection so an in-game
-        // /target on a door still surfaces here.
-        if ((s.type === SpawnType.DOOR || s.type === SpawnType.DROP) &&
-            s.id !== selId) continue;
+        // List-filter mirror: door/drop type, hideFiltered (FILTERED_BIT),
+        // category, and name-needle all apply. NO selection-pierce — when
+        // the user filters something out (via SpawnList controls), it's
+        // hidden on the map too, even if it's the current selection.
+        // (Height filter still pierces below; that's a separate concern.)
+        if (!passesSpawnFilter(s, spawnFilterRef.current)) continue;
         // Height filter: drop out-of-band spawns from the draw and from
         // hit-testing (this precedes the hits.push below). The selected spawn
         // always pierces the filter so its dot + the magenta line stay visible
