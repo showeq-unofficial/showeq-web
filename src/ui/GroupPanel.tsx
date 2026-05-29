@@ -1,7 +1,9 @@
 import type { SpawnStore } from '../state/store';
 import { classNameOf } from './classes';
 
-const SLOT_COUNT = 6;
+// MAX_GROUP_PEERS = MAX_GROUP_MEMBERS - 1 = 5; the local player is filtered
+// out of the daemon's GroupMgr roster, so only peer slots are emitted.
+const SLOT_COUNT = 5;
 
 function fmt(n: number, width = 4): string {
   return n.toFixed(0).padStart(width, ' ');
