@@ -155,6 +155,48 @@ export function SpawnList({
   const setHideFiltered = useSpawnFilterStore((s) => s.setHideFiltered);
   const nameFilter = useSpawnFilterStore((s) => s.nameFilter);
   const setNameFilter = useSpawnFilterStore((s) => s.setNameFilter);
+  // Advanced view filters (level band + spawn-type buckets) + named
+  // presets. These live in the same shared store, so they also drive the
+  // map. The bar below them is collapsed by default to stay compact.
+  const levelMin = useSpawnFilterStore((s) => s.levelMin);
+  const levelMax = useSpawnFilterStore((s) => s.levelMax);
+  const setLevelMin = useSpawnFilterStore((s) => s.setLevelMin);
+  const setLevelMax = useSpawnFilterStore((s) => s.setLevelMax);
+  const levelRelative = useSpawnFilterStore((s) => s.levelRelative);
+  const levelRelLow = useSpawnFilterStore((s) => s.levelRelLow);
+  const levelRelHigh = useSpawnFilterStore((s) => s.levelRelHigh);
+  const setLevelRelative = useSpawnFilterStore((s) => s.setLevelRelative);
+  const setLevelRelLow = useSpawnFilterStore((s) => s.setLevelRelLow);
+  const setLevelRelHigh = useSpawnFilterStore((s) => s.setLevelRelHigh);
+  const filterPlayerLevel = useSpawnFilterStore((s) => s.playerLevel);
+  const types = useSpawnFilterStore((s) => s.types);
+  const setTypeVisible = useSpawnFilterStore((s) => s.setTypeVisible);
+  const resetAdvancedFilters = useSpawnFilterStore((s) => s.resetAdvancedFilters);
+  const presets = useSpawnFilterStore((s) => s.presets);
+  const savePreset = useSpawnFilterStore((s) => s.savePreset);
+  const applyPreset = useSpawnFilterStore((s) => s.applyPreset);
+  const deletePreset = useSpawnFilterStore((s) => s.deletePreset);
+  const [filtersOpen, setFiltersOpen] = useState<boolean>(
+    () => localStorage.getItem('spawnlist.filtersOpen') === '1',
+  );
+  const toggleFiltersOpen = () =>
+    setFiltersOpen((v) => {
+      const next = !v;
+      localStorage.setItem('spawnlist.filtersOpen', next ? '1' : '0');
+      return next;
+    });
+  const [presetDraft, setPresetDraft] = useState('');
+  // Count of active advanced filters for the "• N active" summary: a level
+  // bound (either side) counts as one, any hidden type bucket as one.
+  const levelFilterActive = levelRelative || levelMin > 0 || levelMax > 0;
+  const activeAdvanced =
+    (levelFilterActive ? 1 : 0) +
+    (Object.values(types).some((v) => !v) ? 1 : 0);
+  const commitPreset = () => {
+    if (!presetDraft.trim()) return;
+    savePreset(presetDraft);
+    setPresetDraft('');
+  };
   // Row tints (Hunt/Caution/Danger/etc. backgrounds) are on by default.
   // Persisted because the preference is per-user, not per-session.
   const [rowTints, setRowTints] = useState<boolean>(
@@ -193,7 +235,18 @@ export function SpawnList({
     // but never resends the player's Spawn record, so Spawn.level is frozen
     // at zone-in and con colors would otherwise drift after a ding.
     const pLevel = store.stats()?.level ?? player?.level ?? 0;
-    const filterState = { categoryFilter, hideFiltered, nameFilter };
+    const filterState = {
+      categoryFilter,
+      hideFiltered,
+      nameFilter,
+      levelMin,
+      levelMax,
+      levelRelative,
+      levelRelLow,
+      levelRelHigh,
+      playerLevel: pLevel,
+      types,
+    };
     const out: Row[] = [];
     for (const s of store.all()) {
       if (player && s.id === player.id) continue;
@@ -217,7 +270,7 @@ export function SpawnList({
       });
     }
     return out;
-  }, [store, categoryFilter, hideFiltered, nameFilter, localTick]);
+  }, [store, categoryFilter, hideFiltered, nameFilter, levelMin, levelMax, levelRelative, levelRelLow, levelRelHigh, types, localTick]);
 
   // Player row is rendered separately so it stays pinned at the top of
   // the table regardless of sort and scroll position. HP comes from
@@ -372,6 +425,184 @@ export function SpawnList({
           )}
         </div>
       </div>
+      <div className="flex items-center gap-2 border-b border-border px-2 py-1 text-[11px] text-muted-foreground">
+        <button
+          type="button"
+          onClick={toggleFiltersOpen}
+          aria-expanded={filtersOpen}
+          className="flex items-center gap-1 rounded px-1 text-foreground hover:bg-bg-alt"
+        >
+          <span className="text-[10px] leading-none">{filtersOpen ? '▾' : '▸'}</span>
+          Filters
+        </button>
+        {activeAdvanced > 0 && (
+          <span className="rounded bg-primary/20 px-1.5 py-px text-[10px] tabular-nums text-foreground">
+            {activeAdvanced} active
+          </span>
+        )}
+        {activeAdvanced > 0 && (
+          <button
+            type="button"
+            onClick={resetAdvancedFilters}
+            className="rounded px-1 text-muted-foreground hover:text-foreground"
+          >
+            clear
+          </button>
+        )}
+        <div className="ml-auto flex items-center gap-1">
+          <select
+            value=""
+            onChange={(e) => { if (e.target.value) applyPreset(e.target.value); }}
+            aria-label="Apply filter preset"
+            disabled={presets.length === 0}
+            title={presets.length === 0 ? 'No saved presets yet' : 'Apply a saved preset'}
+            className="max-w-[120px] rounded border border-border bg-bg-alt px-1 py-0.5 text-[11px] text-foreground disabled:opacity-50"
+          >
+            <option value="">Presets…</option>
+            {presets.map((p) => (
+              <option key={p.name} value={p.name}>{p.name}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+      {filtersOpen && (
+        <div className="flex flex-col gap-2 border-b border-border bg-bg-panel/40 px-2 py-2 text-[11px] text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="w-12 shrink-0">Level</span>
+            <div className="inline-flex overflow-hidden rounded border border-border text-[10px]">
+              <button
+                type="button"
+                onClick={() => setLevelRelative(false)}
+                title="Absolute level band"
+                className={
+                  'px-2 py-0.5 ' +
+                  (!levelRelative
+                    ? 'bg-bg-base text-foreground'
+                    : 'bg-bg-panel/40 text-muted-foreground hover:bg-bg-base/60')
+                }
+              >
+                Abs
+              </button>
+              <button
+                type="button"
+                onClick={() => setLevelRelative(true)}
+                title="Band relative to your current level"
+                className={
+                  'border-l border-border px-2 py-0.5 ' +
+                  (levelRelative
+                    ? 'bg-bg-base text-foreground'
+                    : 'bg-bg-panel/40 text-muted-foreground hover:bg-bg-base/60')
+                }
+              >
+                ±Me
+              </button>
+            </div>
+            {levelRelative ? (
+              <span className="flex flex-wrap items-center gap-1">
+                <span className="text-muted-foreground">Me</span>
+                <input
+                  type="number"
+                  min={-99}
+                  max={99}
+                  value={levelRelLow}
+                  onChange={(e) => setLevelRelLow(Number(e.target.value))}
+                  aria-label="Lower level offset from your level"
+                  className="w-12 rounded border border-border bg-bg-base px-1 py-0.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+                <span>…</span>
+                <span className="text-muted-foreground">Me</span>
+                <input
+                  type="number"
+                  min={-99}
+                  max={99}
+                  value={levelRelHigh}
+                  onChange={(e) => setLevelRelHigh(Number(e.target.value))}
+                  aria-label="Upper level offset from your level"
+                  className="w-12 rounded border border-border bg-bg-base px-1 py-0.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+                <span className="text-muted-foreground/70">
+                  {filterPlayerLevel > 0
+                    ? `(${Math.max(1, filterPlayerLevel + levelRelLow)}–${Math.max(1, filterPlayerLevel + levelRelHigh)})`
+                    : '(your level unknown)'}
+                </span>
+              </span>
+            ) : (
+              <span className="flex items-center gap-1">
+                <input
+                  type="number"
+                  min={0}
+                  max={130}
+                  value={levelMin || ''}
+                  onChange={(e) => setLevelMin(Number(e.target.value))}
+                  placeholder="min"
+                  aria-label="Minimum level"
+                  className="w-14 rounded border border-border bg-bg-base px-1 py-0.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+                <span>–</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={130}
+                  value={levelMax || ''}
+                  onChange={(e) => setLevelMax(Number(e.target.value))}
+                  placeholder="max"
+                  aria-label="Maximum level"
+                  className="w-14 rounded border border-border bg-bg-base px-1 py-0.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="w-12 shrink-0">Type</span>
+            {([['npc', 'NPC'], ['pc', 'PC'], ['corpse', 'Corpse']] as const).map(
+              ([k, label]) => (
+                <label key={k} className="flex cursor-pointer items-center gap-1">
+                  <input
+                    type="checkbox"
+                    checked={types[k]}
+                    onChange={(e) => setTypeVisible(k, e.target.checked)}
+                    className="h-3 w-3 accent-blue-500"
+                  />
+                  {label}
+                </label>
+              ),
+            )}
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="w-12 shrink-0">Preset</span>
+            <input
+              type="text"
+              value={presetDraft}
+              onChange={(e) => setPresetDraft(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') commitPreset(); }}
+              placeholder="save current as…"
+              aria-label="Preset name"
+              className="w-32 rounded border border-border bg-bg-base px-1 py-0.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+            <button
+              type="button"
+              onClick={commitPreset}
+              disabled={!presetDraft.trim()}
+              className="rounded border border-border bg-bg-alt px-1.5 py-0.5 text-foreground hover:bg-bg-base disabled:opacity-50"
+            >
+              Save
+            </button>
+            {presets.length > 0 && (
+              <select
+                value=""
+                onChange={(e) => { if (e.target.value) deletePreset(e.target.value); }}
+                aria-label="Delete a preset"
+                className="rounded border border-border bg-bg-alt px-1 py-0.5 text-foreground"
+              >
+                <option value="">Delete…</option>
+                {presets.map((p) => (
+                  <option key={p.name} value={p.name}>{p.name}</option>
+                ))}
+              </select>
+            )}
+          </div>
+        </div>
+      )}
       <div className="flex items-center justify-between gap-2 border-b border-border px-2 py-1 text-[11px] text-muted-foreground">
         <span>{rows.length} spawn{rows.length === 1 ? '' : 's'}</span>
         <label

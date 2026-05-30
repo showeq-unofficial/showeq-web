@@ -144,6 +144,10 @@ interface LayoutState {
   statusBarVisible: boolean;
   railWidths: RailWidths;
   leftSplit: number;
+  // Whole-rail collapse. Independent of per-panel visibility: a collapsed
+  // rail keeps its panels assigned but hides the rail body so the map gets
+  // the space. A thin reopen strip is rendered in App when collapsed.
+  railCollapsed: { left: boolean; right: boolean };
 
   togglePanel: (k: PanelKey) => void;
   hidePanel: (k: PanelKey) => void;
@@ -152,6 +156,8 @@ interface LayoutState {
   setLeftRailWidth: (dx: number) => void;
   setRightRailWidth: (dx: number) => void;
   setLeftSplit: (updater: (prev: number) => number) => void;
+  toggleRailCollapsed: (side: RailSide) => void;
+  setRailCollapsed: (side: RailSide, v: boolean) => void;
   undock: (k: PanelKey, anchor?: { x: number; y: number; w: number; h: number }) => void;
   dockToSlot: (k: PanelKey, side: RailSide, slot?: number) => void;
   resetDockTo: (k: PanelKey) => void;
@@ -188,6 +194,7 @@ export const useLayoutStore = create<LayoutState>()(
       statusBarVisible: loadInitialStatusBarVisible(),
       railWidths:   loadInitialRailWidths(),
       leftSplit:    loadInitialLeftSplit(),
+      railCollapsed: { left: false, right: false },
 
       togglePanel: (k) =>
         set((s) => ({ visibility: { ...s.visibility, [k]: !s.visibility[k] } })),
@@ -202,6 +209,10 @@ export const useLayoutStore = create<LayoutState>()(
         set((s) => ({ railWidths: { ...s.railWidths, right: clampRail(s.railWidths.right - dx) } })),
       setLeftSplit: (updater) =>
         set((s) => ({ leftSplit: clampSplit(updater(s.leftSplit)) })),
+      toggleRailCollapsed: (side) =>
+        set((s) => ({ railCollapsed: { ...s.railCollapsed, [side]: !s.railCollapsed[side] } })),
+      setRailCollapsed: (side, v) =>
+        set((s) => ({ railCollapsed: { ...s.railCollapsed, [side]: v } })),
 
       undock: (k, anchor) => {
         // Seed the FloatingWindow's persisted pos+size to the panel's
@@ -252,6 +263,7 @@ export const useLayoutStore = create<LayoutState>()(
           },
           railWidths: { left: DEFAULT_LEFT_WIDTH, right: DEFAULT_RIGHT_WIDTH },
           leftSplit: DEFAULT_LEFT_SPLIT,
+          railCollapsed: { left: false, right: false },
         });
       },
     }),
@@ -269,6 +281,7 @@ export const useLayoutStore = create<LayoutState>()(
         statusBarVisible: state.statusBarVisible,
         railWidths: state.railWidths,
         leftSplit: state.leftSplit,
+        railCollapsed: state.railCollapsed,
       }),
     },
   ),

@@ -26,7 +26,7 @@ import { GroupPanel } from './GroupPanel';
 import { MapCanvas } from './MapCanvas';
 import { Panel } from './Panel';
 import { PreferencesPanel } from './PreferencesPanel';
-import { ResizeHandle } from './ResizeHandle';
+import { RailDivider, CollapsedRail } from './RailDivider';
 import { SettingsModal } from './SettingsModal';
 import { SpawnList } from './SpawnList';
 import { SpawnPointList } from './SpawnPointList';
@@ -42,6 +42,7 @@ import { FloatingWindow } from './FloatingWindow';
 import { SnapZones, type SnapHint, type SnapSide } from './SnapZones';
 import { useLayoutStore, type PanelKey } from '../state/layoutStore';
 import { usePrefsStore } from '../state/prefsStore';
+import { useSpawnFilterStore } from '../state/spawnFilterStore';
 import { cueKeyForFilterFlags } from '../state/alertsStore';
 import { playFilterCue } from '../lib/audioCue';
 import { useBuffWarnings } from '../lib/useBuffWarnings';
@@ -147,6 +148,7 @@ export function App() {
   const statusBarVisible = useLayoutStore((s) => s.statusBarVisible);
   const railWidths   = useLayoutStore((s) => s.railWidths);
   const leftSplit    = useLayoutStore((s) => s.leftSplit);
+  const railCollapsed = useLayoutStore((s) => s.railCollapsed);
   const togglePanel       = useLayoutStore((s) => s.togglePanel);
   const hidePanel         = useLayoutStore((s) => s.hidePanel);
   const setPanelsLocked   = useLayoutStore((s) => s.setPanelsLocked);
@@ -154,6 +156,8 @@ export function App() {
   const setLeftRailWidth  = useLayoutStore((s) => s.setLeftRailWidth);
   const setRightRailWidth = useLayoutStore((s) => s.setRightRailWidth);
   const setLeftSplit      = useLayoutStore((s) => s.setLeftSplit);
+  const toggleRailCollapsed = useLayoutStore((s) => s.toggleRailCollapsed);
+  const setRailCollapsed    = useLayoutStore((s) => s.setRailCollapsed);
   const undock            = useLayoutStore((s) => s.undock);
   const dockToSlot        = useLayoutStore((s) => s.dockToSlot);
   const resetDockTo       = useLayoutStore((s) => s.resetDockTo);
@@ -218,6 +222,16 @@ export function App() {
   // hidden.
   useBuffWarnings(store);
 
+  // Keep the spawn-filter store's live player level in sync so the "±Me"
+  // relative level band can resolve. Guarded so the 1Hz tick only writes
+  // (and re-renders filter consumers) when the level actually changes.
+  useEffect(() => {
+    const lvl = store.stats()?.level ?? store.player()?.level ?? 0;
+    if (lvl !== useSpawnFilterStore.getState().playerLevel) {
+      useSpawnFilterStore.getState().setPlayerLevel(lvl);
+    }
+  }, [tick, store]);
+
   // Convert pixel-space drag delta into a fraction of the rail's
   // current height. Reading from the DOM avoids tracking a separate
   // resize observer for the rail container — its height is always
@@ -274,8 +288,13 @@ export function App() {
     const z = hitTest(rect);
     dragKeyRef.current = null;
     setSnapHint(null);
-    if (z) dockToSlot(key, z.side, z.slot);
-  }, [dockToSlot, hitTest]);
+    if (z) {
+      dockToSlot(key, z.side, z.slot);
+      // Docking onto a collapsed rail should reveal it, else the panel
+      // vanishes into a hidden rail.
+      setRailCollapsed(z.side, false);
+    }
+  }, [dockToSlot, hitTest, setRailCollapsed]);
 
   // Drag-out gesture: detach when the user mouses down on the panel
   // header and moves > 6 px. Buttons in the header (close/detach) are
@@ -408,8 +427,10 @@ export function App() {
     visibility[k] && dockLocation[k] === side;
   const leftPanels  = panelOrder.left.filter((k) => isDocked(k, 'left'));
   const rightPanels = panelOrder.right.filter((k) => isDocked(k, 'right'));
-  const showLeftRail  = leftPanels.length > 0;
-  const showRightRail = rightPanels.length > 0;
+  const leftHasPanels  = leftPanels.length > 0;
+  const rightHasPanels = rightPanels.length > 0;
+  const showLeftRail  = leftHasPanels  && !railCollapsed.left;
+  const showRightRail = rightHasPanels && !railCollapsed.right;
   // The Spawns/SpawnPoints split survives only as long as those are the
   // only two left-rail panels — otherwise leftSplit isn't meaningful.
   const useLeftSplit =
@@ -607,8 +628,19 @@ export function App() {
                 return nodes;
               })}
             </div>
-            <ResizeHandle onDrag={setLeftRailWidth} />
+            <RailDivider
+              side="left"
+              onResize={setLeftRailWidth}
+              onCollapse={() => toggleRailCollapsed('left')}
+            />
           </>
+        )}
+        {!showLeftRail && leftHasPanels && (
+          <CollapsedRail
+            side="left"
+            labels={leftPanels.map((k) => PANEL_TITLES[k])}
+            onExpand={() => toggleRailCollapsed('left')}
+          />
         )}
         <div className="min-w-[300px] flex-1">
           <MapCanvas
@@ -622,9 +654,20 @@ export function App() {
             smoothMovement={smoothMovement}
           />
         </div>
+        {!showRightRail && rightHasPanels && (
+          <CollapsedRail
+            side="right"
+            labels={rightPanels.map((k) => PANEL_TITLES[k])}
+            onExpand={() => toggleRailCollapsed('right')}
+          />
+        )}
         {showRightRail && (
           <>
-            <ResizeHandle onDrag={setRightRailWidth} />
+            <RailDivider
+              side="right"
+              onResize={setRightRailWidth}
+              onCollapse={() => toggleRailCollapsed('right')}
+            />
             <div
               ref={rightRailRef}
               className="flex shrink-0 flex-col"

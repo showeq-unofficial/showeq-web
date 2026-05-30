@@ -256,6 +256,36 @@ describe('layoutStore — resetLayout', () => {
   });
 });
 
+describe('layoutStore — railCollapsed', () => {
+  it('defaults to neither rail collapsed', async () => {
+    const { useLayoutStore } = await loadStore();
+    expect(useLayoutStore.getState().railCollapsed).toEqual({ left: false, right: false });
+  });
+
+  it('toggleRailCollapsed flips one side and persists it', async () => {
+    const { useLayoutStore } = await loadStore();
+    useLayoutStore.getState().toggleRailCollapsed('left');
+    expect(useLayoutStore.getState().railCollapsed).toEqual({ left: true, right: false });
+    const persisted = JSON.parse(localStorage.getItem('showeq.layout') ?? '{}');
+    expect(persisted.state.railCollapsed.left).toBe(true);
+  });
+
+  it('setRailCollapsed sets an explicit value', async () => {
+    const { useLayoutStore } = await loadStore();
+    useLayoutStore.getState().setRailCollapsed('right', true);
+    expect(useLayoutStore.getState().railCollapsed.right).toBe(true);
+    useLayoutStore.getState().setRailCollapsed('right', false);
+    expect(useLayoutStore.getState().railCollapsed.right).toBe(false);
+  });
+
+  it('resetLayout clears collapse back to defaults', async () => {
+    const { useLayoutStore } = await loadStore();
+    useLayoutStore.getState().setRailCollapsed('left', true);
+    useLayoutStore.getState().resetLayout();
+    expect(useLayoutStore.getState().railCollapsed).toEqual({ left: false, right: false });
+  });
+});
+
 // Reference exists so the import-graph stays alive even if we delete a
 // leaf test above — keeps tooling from yelling about an unused symbol.
 void SHOWEQ_KEYS;
