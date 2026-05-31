@@ -414,6 +414,12 @@ export function App() {
     }, 500);
 
     client.connect();
+    // Request the map-package list so the MapCanvas picker populates
+    // promptly. The daemon also pushes a MapPackagesUpdate on subscribe,
+    // but mirroring the devices-style request keeps parity and covers a
+    // resume/replay that skips the initial Snapshot. The send no-ops
+    // until the socket is open; the on-subscribe push covers that window.
+    client.listMapPackages();
     return () => {
       clearInterval(poll);
       ws.detach();
@@ -645,6 +651,7 @@ export function App() {
         <div className="min-w-[300px] flex-1">
           <MapCanvas
             store={store}
+            client={clientRef.current}
             tick={tick}
             selectedId={selectedId}
             selectVersion={selectVersion}

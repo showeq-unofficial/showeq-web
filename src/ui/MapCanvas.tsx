@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { SpawnStore } from '../state/store';
+import type { SeqClient } from '../net/client';
 import { SpawnType } from '@gen/seq/v1/events_pb';
 import { useSpawnFilterStore, passesSpawnFilter } from '../state/spawnFilterStore';
 import { classNameOf } from './classes';
@@ -117,6 +118,7 @@ class PosSmoother {
 
 export function MapCanvas({
   store,
+  client,
   tick,
   selectedId,
   selectVersion,
@@ -126,6 +128,7 @@ export function MapCanvas({
   smoothMovement,
 }: {
   store: SpawnStore;
+  client: SeqClient | null;
   tick: number;
   selectedId: number | null;
   selectVersion: number;
@@ -919,6 +922,15 @@ export function MapCanvas({
     return Array.from(s).sort((a, b) => a - b);
   }, [tick, store]);
 
+  // Map provider packages — read from the store on each tick re-render
+  // (same pattern as the other store-backed panels). The list is
+  // replaced wholesale by each MapPackagesUpdate, so reading it here is
+  // cheap. Selecting a package makes the daemon re-emit ZoneChanged with
+  // the new geometry, which the render loop picks up automatically.
+  void tick;
+  const mapPackages = store.mapPackages();
+  const activeMapPackage = store.activeMapPackage();
+
   const toggleLayer = (layer: number) => {
     setVisibleLayers((prev) => {
       const next = new Set(prev);
@@ -1038,6 +1050,24 @@ export function MapCanvas({
           />
           Info
         </label>
+        {mapPackages.length > 1 && (
+          <label className="mb-2 flex items-center gap-1 text-[11px] text-foreground">
+            <span className="w-7 shrink-0 text-muted-foreground">Map</span>
+            <select
+              value={activeMapPackage}
+              onChange={(e) => client?.setMapPackage(e.target.value)}
+              className="flex-1 rounded border border-border bg-bg-alt px-1 py-0.5 text-[11px] text-foreground"
+              title="Map provider package"
+            >
+              {mapPackages.map((pkg) => (
+                <option key={pkg.id} value={pkg.id}>
+                  {pkg.label || pkg.id}
+                  {pkg.zoneCount > 0 ? ` (${pkg.zoneCount})` : ''}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <div className="mb-2 border-t border-border pt-1.5">
           <label className="mb-1 flex cursor-pointer items-center gap-1 text-[11px] text-foreground">
             <input

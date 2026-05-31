@@ -4,10 +4,12 @@ import {
   ClientEnvelopeSchema,
   EditFilterRuleSchema,
   ListDevicesSchema,
+  ListMapPackagesSchema,
   ReloadFiltersSchema,
   RemoveFilterRuleSchema,
   RenameSpawnPointSchema,
   SaveFiltersSchema,
+  SetMapPackageSchema,
   SetPrefSchema,
   SubscribeSchema,
   Topic,
@@ -248,6 +250,39 @@ export class SeqClient {
       payload: {
         case: 'listDevices',
         value: create(ListDevicesSchema, {}),
+      },
+    });
+    this.send(env);
+  }
+
+  // Ask the daemon for the available map provider packages (the
+  // subdirectories under its maps root plus the synthetic "default" =
+  // flat root). The daemon replies on this connection only with a
+  // MapPackagesUpdate envelope. The daemon also sends one unprompted on
+  // subscribe; this mirrors listDevices for parity so the picker
+  // populates promptly. Callers wire onEnvelope to pick the reply up.
+  listMapPackages(): void {
+    const env = create(ClientEnvelopeSchema, {
+      payload: {
+        case: 'listMapPackages',
+        value: create(ListMapPackagesSchema, {}),
+      },
+    });
+    this.send(env);
+  }
+
+  // Switch the daemon's active map provider package to `id` (as seen in
+  // MapPackagesUpdate.packages[].id; "default" = the flat maps root).
+  // The daemon persists the choice, re-resolves the current zone's map,
+  // broadcasts a MapPackagesUpdate, and emits a fresh ZoneChanged with
+  // the new geometry — so the map re-renders with no extra client work.
+  // Unknown ids fall back to "default". Fire and forget; the UI reacts
+  // to the resulting MapPackagesUpdate / ZoneChanged echoes.
+  setMapPackage(id: string): void {
+    const env = create(ClientEnvelopeSchema, {
+      payload: {
+        case: 'setMapPackage',
+        value: create(SetMapPackageSchema, { id }),
       },
     });
     this.send(env);

@@ -10,6 +10,7 @@ import type {
   Item,
   ItemCacheTotals,
   MapGeometry,
+  MapPackage,
   PlayerStats,
   Pref,
   Spawn,
@@ -142,6 +143,13 @@ export class SpawnStore {
   // zoneChanged so a stale endpoint doesn't linger after the next world
   // handoff arrives (the daemon will re-emit on every handoff).
   private zoneServer: ZoneServer | undefined;
+  // Available map provider packages and the globally-active one. Replaced
+  // wholesale on each MapPackagesUpdate (sent on subscribe + whenever the
+  // active package changes). Picking a package re-resolves the zone, which
+  // the daemon delivers as a fresh ZoneChanged — handled above — so no
+  // geometry bookkeeping is needed here.
+  private mapPackagesList: MapPackage[] = [];
+  private activeMapPackageId = '';
   // Bounded ring buffers (oldest first). Growth capped at the *_LIMIT
   // constants above to prevent unbounded memory in long sessions.
   private chat: ChatEntry[] = [];
@@ -316,6 +324,12 @@ export class SpawnStore {
       case 'zoneServer':
         this.zoneServer = p.value;
         break;
+      case 'mapPackages':
+        // Wholesale replace — the daemon always sends the full package
+        // list plus the active id (mirrors DevicesList / BoxListUpdated).
+        this.mapPackagesList = p.value.packages;
+        this.activeMapPackageId = p.value.activeId;
+        break;
       default:
         break;
     }
@@ -414,6 +428,13 @@ export class SpawnStore {
     return this.eqTimeSync ? { sync: this.eqTimeSync, serverMs: this.eqTimeSyncServerMs } : undefined;
   }
   zoneServerInfo(): ZoneServer | undefined { return this.zoneServer; }
+  // Available map provider packages (display-only list). Replaced
+  // wholesale on each MapPackagesUpdate, so the returned reference is a
+  // fresh array per update — safe to treat as a value.
+  mapPackages(): ReadonlyArray<MapPackage> { return this.mapPackagesList; }
+  // Id of the globally-active map package ("default" = flat maps root,
+  // empty until the first MapPackagesUpdate arrives).
+  activeMapPackage(): string { return this.activeMapPackageId; }
   pref(section: string, key: string): Pref | undefined {
     return this.prefs.get(`${section}.${key}`);
   }
