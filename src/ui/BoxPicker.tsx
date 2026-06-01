@@ -25,12 +25,18 @@ export function BoxPicker({ onChange }: Props) {
         onChange={(e) => onChange(e.target.value)}
         className="rounded border border-border bg-bg-base px-1 py-0.5 font-mono text-xs text-foreground focus:border-ring focus:outline-none"
       >
-        {boxes.map((b) => (
-          <option key={b.boxId} value={b.boxId}>
-            {b.displayName || b.boxId.slice(0, 10)}
-            {b.clientIp ? ` (${b.clientIp})` : ''}
-          </option>
-        ))}
+        {boxes.map((b) => {
+          // All boxes share one host IP (same-host multibox), so the IP is
+          // not a useful discriminator — label by character, zone, level.
+          const name = b.displayName || b.boxId.slice(0, 10);
+          const zone = b.zone ? ` — ${b.zone}` : '';
+          const lvl  = b.level > 0 ? ` (L${b.level})` : '';
+          return (
+            <option key={b.boxId} value={b.boxId}>
+              {name}{zone}{lvl}
+            </option>
+          );
+        })}
       </select>
     </label>
   );

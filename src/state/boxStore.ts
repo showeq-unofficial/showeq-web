@@ -11,6 +11,8 @@ export interface BoxView {
   displayName:  string;  // empty until daemon-side NamePromoter fires
   clientIp:     string;
   packetCount:  number;
+  zone:         string;  // short zone name; empty until the box zones in
+  level:        number;  // player level; 0 until OP_PlayerProfile decodes
 }
 
 interface BoxState {

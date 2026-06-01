@@ -396,6 +396,8 @@ export function App() {
           displayName: b.displayName,
           clientIp:    b.clientIp,
           packetCount: b.packetCount,
+          zone:        b.zone,
+          level:       b.level,
         })),
         p.value.activeBoxId,
       );
