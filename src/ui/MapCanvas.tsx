@@ -19,6 +19,24 @@ const COLOR_BY_TYPE: Record<number, string> = {
   [SpawnType.DROP]:       '#ffe066',
 };
 
+// Spawn-point "+" color ramp — ports showeq-c's pickSpawnPointColor
+// (mapicon.cpp:1316). With no learned cycle (death or diff unknown) the
+// point is neutral gray. Once a cycle is known: a dark→bright-yellow
+// ramp as the respawn approaches (QColor(age,age,0)), then overdue
+// (age>220) flashes red ↔ gray, and a full cycle past due (age==255) is
+// solid dark red. `age` is 255*(now-death)/diff clamped — the same
+// value SpawnPointList uses to redden overdue rows. `flash` is the
+// caller's 200 ms toggle (mirrors showeq-c's m_flash); legacy holds the
+// age==255 dark red steady and only flashes the 221–254 band.
+function spawnPointColor(deathS: number, diffS: number, flash: boolean): string {
+  if (deathS === 0 || diffS === 0) return '#808080';
+  const nowS = Date.now() / 1000;
+  const age = Math.min(255, Math.max(0, Math.floor((255 * (nowS - deathS)) / diffS)));
+  if (age === 255) return '#800000';
+  if (age > 220) return flash ? '#ff0000' : '#808080';
+  return `rgb(${age},${age},0)`;
+}
+
 // Pixel radius for hit-testing on spawn dots — slightly larger than the
 // 3px drawn dot so the click target is forgiving. Mirrors showeq-c's
 // 15px `closestSpawnToPoint` distance for clicks (map.cpp:2051), with a
@@ -42,7 +60,10 @@ const zoomToSlider = (z: number) =>
 // is treated as a click rather than a drag-pan.
 const DRAG_THRESHOLD = 4;
 
-type SpawnHit = { id: number; x: number; y: number };
+// `clickable: false` marks a hit that can be hovered (tooltip) but not
+// click-selected — used for ground drops, which we let the user inspect
+// without letting them steal selection off a nearby mob.
+type SpawnHit = { id: number; x: number; y: number; clickable?: boolean };
 
 // Per-spawn position with linear interpolation between the last two
 // daemon updates. Daemon ships position updates at ~5 Hz; without lerp
@@ -247,6 +268,17 @@ export function MapCanvas({
     localStorage.setItem('map.showGrid', showGrid ? '1' : '0');
   }, [showGrid]);
   const GRID_RESOLUTION = 500;
+  // Spawn-point overlay (learned NPC respawn locations). Data already
+  // arrives via the SpawnPoint envelope events that feed the Spawn
+  // Points panel; this just toggles drawing the "+" markers on the map.
+  const [showSpawnPoints, setShowSpawnPoints] = useState<boolean>(
+    () => localStorage.getItem('map.showSpawnPoints') !== '0',
+  );
+  const showSpawnPointsRef = useRef(showSpawnPoints);
+  useEffect(() => {
+    showSpawnPointsRef.current = showSpawnPoints;
+    localStorage.setItem('map.showSpawnPoints', showSpawnPoints ? '1' : '0');
+  }, [showSpawnPoints]);
   // Track-player: when on, the render loop pins pan so the player sits at
   // the canvas center. Manual drag-pan flips it off via the parent-owned
   // setter so the user can look elsewhere without fighting the tracker.
@@ -371,7 +403,12 @@ export function MapCanvas({
     let downAt: { clientX: number; clientY: number } | null = null;
     let movedFar = false;
 
-    const findHit = (clientX: number, clientY: number, radius: number) => {
+    const findHit = (
+      clientX: number,
+      clientY: number,
+      radius: number,
+      clickableOnly = false,
+    ) => {
       const rect = canvas.getBoundingClientRect();
       const cx = clientX - rect.left;
       const cy = clientY - rect.top;
@@ -379,6 +416,7 @@ export function MapCanvas({
       let best: SpawnHit | null = null;
       let bestD2 = Infinity;
       for (const h of spawnHitsRef.current) {
+        if (clickableOnly && h.clickable === false) continue;
         const dx = h.x - cx;
         const dy = h.y - cy;
         const d2 = dx * dx + dy * dy;
@@ -435,7 +473,7 @@ export function MapCanvas({
       // Click: select nearest spawn within CLICK_HIT_RADIUS, or clear
       // selection on empty space (matches the showeq-c behavior of
       // requiring a hit but pairs well with the SpawnList row toggle).
-      const hit = findHit(e.clientX, e.clientY, CLICK_HIT_RADIUS);
+      const hit = findHit(e.clientX, e.clientY, CLICK_HIT_RADIUS, true);
       if (hit) {
         skipCenterForIdRef.current = hit.id;
         onSelectRef.current(hit.id);
@@ -711,6 +749,30 @@ export function MapCanvas({
         }
       }
 
+      // Spawn points (learned NPC respawn locations) — ports showeq-c's
+      // paintSpawnPoints + tIconTypeSpawnPoint (map.cpp:4228,
+      // mapicon.cpp:1255): a small age-colored "+" at each promoted
+      // point. Drawn under the live spawn dots so an active mob sitting
+      // on its point stays on top. Respects the height-filter band like
+      // geometry and spawns do.
+      if (showSpawnPointsRef.current) {
+        ctx.lineWidth = 1;
+        // 200 ms flash phase for overdue points — mirrors showeq-c's
+        // m_flash timer. The rAF loop runs continuously (gated only by
+        // the FPS cap, which stays well above 5 Hz), so this animates
+        // without any extra timer.
+        const spFlash = animNow % 400 < 200;
+        for (const sp of store.allSpawnPoints()) {
+          if (heightOn && !inBand(sp.z)) continue;
+          const [px, py] = project(sp.x, sp.y);
+          ctx.strokeStyle = spawnPointColor(Number(sp.deathTimeS), Number(sp.diffTimeS), spFlash);
+          ctx.beginPath();
+          ctx.moveTo(px, py - 3); ctx.lineTo(px, py + 3);
+          ctx.moveTo(px - 3, py); ctx.lineTo(px + 3, py);
+          ctx.stroke();
+        }
+      }
+
       // Spawns.
       const selId = selectedIdRef.current;
       // Prefer PlayerStats.level over the Spawn record: the daemon never
@@ -722,12 +784,19 @@ export function MapCanvas({
       let selectedScreen: { x: number; y: number } | null = null;
       for (const s of spawns) {
         if (s.id === player?.id) continue;
-        // List-filter mirror: door/drop type, hideFiltered (FILTERED_BIT),
-        // category, and name-needle all apply. NO selection-pierce — when
-        // the user filters something out (via SpawnList controls), it's
-        // hidden on the map too, even if it's the current selection.
-        // (Height filter still pierces below; that's a separate concern.)
-        if (!passesSpawnFilter(s, spawnFilterRef.current)) continue;
+        // Doors/drops are scenery: the shared spawn filter excludes them
+        // (SpawnList honors that too), but on the map we draw them with
+        // their own glyphs. Bypass only the door/drop exclusion here —
+        // they carry no level/category to filter on anyway — and below
+        // we keep them out of the hit-test so they stay non-clickable
+        // (the reason they were filtered off the map originally).
+        const isScenery = s.type === SpawnType.DOOR || s.type === SpawnType.DROP;
+        // List-filter mirror: hideFiltered (FILTERED_BIT), category, and
+        // name-needle all apply. NO selection-pierce — when the user
+        // filters something out (via SpawnList controls), it's hidden on
+        // the map too, even if it's the current selection. (Height filter
+        // still pierces below; that's a separate concern.)
+        if (!isScenery && !passesSpawnFilter(s, spawnFilterRef.current)) continue;
         // Height filter: drop out-of-band spawns from the draw and from
         // hit-testing (this precedes the hits.push below). The selected spawn
         // always pierces the filter so its dot + the magenta line stay visible
@@ -736,7 +805,13 @@ export function MapCanvas({
         if (heightOn && s.pos && s.id !== selId && !inBand(s.pos.z)) continue;
         const sp = smoothedPos(s.id, s.pos ?? { x: 0, y: 0 });
         const [px, py] = project(sp.x, sp.y);
-        hits.push({ id: s.id, x: px, y: py });
+        // Scenery interactivity: doors stay fully out of the hit-test;
+        // drops are hoverable (tooltip — "what's on the ground?") but
+        // marked non-clickable so they never steal a selection from a
+        // nearby mob. Live spawns are fully interactive.
+        if (!isScenery) hits.push({ id: s.id, x: px, y: py });
+        else if (s.type === SpawnType.DROP)
+          hits.push({ id: s.id, x: px, y: py, clickable: false });
         if (s.id === selId) selectedScreen = { x: px, y: py };
         // Group-member ring (under selection ring so selection wins).
         if (store.isGroupSpawn(s.id)) {
@@ -753,13 +828,74 @@ export function MapCanvas({
           ctx.arc(px, py, 8, 0, Math.PI * 2);
           ctx.stroke();
         }
-        ctx.fillStyle =
+        // Per-type marker glyph — ports showeq-c's default MapIcons
+        // table (mapicon.cpp:593-757). NPCs and live PCs carry a
+        // con-colored fill; corpses/doors/drops are fixed-color outline
+        // glyphs (no con fill) so they read as objects, not threats.
+        // All use the regular 6px (radius-3) footprint except doors,
+        // which legacy draws at tIconSizeTiny (2px).
+        const fill =
           pLevel > 0 && s.level > 0
             ? conHex(conOf(pLevel, s.level))
             : COLOR_BY_TYPE[s.type] ?? '#ffffff';
-        ctx.beginPath();
-        ctx.arc(px, py, 3, 0, Math.PI * 2);
-        ctx.fill();
+        // Until the player is identified (player_id only arrives in the
+        // Snapshot; undefined at char-select / before zone-in), don't
+        // single PCs out as "other players" — our own character is a PC
+        // and would otherwise flash as a magenta square. Render PCs as
+        // plain con dots in that window; once we know which spawn is us,
+        // it's skipped above (drawn as the white player marker) and real
+        // other-PCs become squares.
+        const glyphType =
+          s.type === SpawnType.PC && !player ? SpawnType.NPC : s.type;
+        switch (glyphType) {
+          case SpawnType.PC:
+            // Square, con fill, magenta outline (tIconTypeSpawnPlayer).
+            ctx.fillStyle = fill;
+            ctx.fillRect(px - 3, py - 3, 6, 6);
+            ctx.strokeStyle = '#ff00ff';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(px - 3, py - 3, 6, 6);
+            break;
+          case SpawnType.CORPSE_PC:
+            // Hollow yellow square, thick border, no fill
+            // (tIconTypeSpawnPlayerCorpse: NoBrush, yellow pen w2).
+            ctx.strokeStyle = '#ffff00';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(px - 3, py - 3, 6, 6);
+            break;
+          case SpawnType.CORPSE_NPC:
+            // Cyan plus/cross (tIconTypeSpawnNPCCorpse: Plus, cyan pen).
+            ctx.strokeStyle = '#00ffff';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(px, py - 3); ctx.lineTo(px, py + 3);
+            ctx.moveTo(px - 3, py); ctx.lineTo(px + 3, py);
+            ctx.stroke();
+            break;
+          case SpawnType.DOOR:
+            // Tiny hollow brown square (tIconTypeDoor: NoBrush, pen
+            // QColor(110,60,0), tIconSizeTiny → 2px).
+            ctx.strokeStyle = '#6e3c00';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(px - 1, py - 1, 2, 2);
+            break;
+          case SpawnType.DROP:
+            // Yellow X (tIconTypeDrop: X, yellow pen).
+            ctx.strokeStyle = '#ffff00';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(px - 3, py - 3); ctx.lineTo(px + 3, py + 3);
+            ctx.moveTo(px - 3, py + 3); ctx.lineTo(px + 3, py - 3);
+            ctx.stroke();
+            break;
+          default:
+            // NPC (and unspecified): con-colored circle
+            // (tIconTypeSpawnNPC: Circle, spawn-color brush).
+            ctx.fillStyle = fill;
+            ctx.beginPath();
+            ctx.arc(px, py, 3, 0, Math.PI * 2);
+            ctx.fill();
+        }
       }
 
       // Player marker + viewport (FOV ellipse) + view direction (yellow
@@ -1044,6 +1180,15 @@ export function MapCanvas({
         <label className="mb-2 flex cursor-pointer items-center gap-1 text-[11px] text-foreground">
           <input
             type="checkbox"
+            checked={showSpawnPoints}
+            onChange={(e) => setShowSpawnPoints(e.target.checked)}
+            className="h-3 w-3 accent-blue-500"
+          />
+          Spawn points
+        </label>
+        <label className="mb-2 flex cursor-pointer items-center gap-1 text-[11px] text-foreground">
+          <input
+            type="checkbox"
             checked={!infoCollapsed}
             onChange={(e) => setInfoCollapsed(!e.target.checked)}
             className="h-3 w-3 accent-blue-500"
@@ -1128,7 +1273,10 @@ export function MapCanvas({
                     onChange={() => toggleLayer(layer)}
                     className="h-3 w-3 accent-blue-500"
                   />
-                  Layer {layer}
+                  {/* Layer 0 is the base geometry; higher layers are
+                      numbered. Mirrors showeq-c's loadLayerButtons
+                      labels "Base", "1", "2", … (map.cpp:5370). */}
+                  {layer === 0 ? 'Base' : layer}
                 </label>
               ))}
             </div>
@@ -1171,6 +1319,7 @@ function HoverTip({
   if (!hover) return null;
   const spawn = store.all().find((s) => s.id === hover.id);
   if (!spawn) return null;
+  const isDrop = spawn.type === SpawnType.DROP;
   const baseName = spawn.name || '(unnamed)';
   const display = spawn.lastName ? `${baseName} (${spawn.lastName})` : baseName;
   const hpPct =
@@ -1182,11 +1331,15 @@ function HoverTip({
       className="pointer-events-none absolute z-10 max-w-[220px] rounded border border-border bg-bg-panel/95 px-2 py-1 text-[11px] text-foreground shadow-md backdrop-blur"
     >
       <div className="truncate font-medium">{display}</div>
-      <div className="text-muted-foreground">
-        L{spawn.level || '?'}
-        {hpPct != null ? ` · ${hpPct}% HP` : ''}
-        {cls ? ` · ${cls}` : ''}
-      </div>
+      {/* Drops are ground loot — no level/HP/class to show, so trim that
+          line and leave just the name + coords. */}
+      {!isDrop && (
+        <div className="text-muted-foreground">
+          L{spawn.level || '?'}
+          {hpPct != null ? ` · ${hpPct}% HP` : ''}
+          {cls ? ` · ${cls}` : ''}
+        </div>
+      )}
       <div className="tabular-nums text-muted-foreground">
         {Math.round(spawn.pos?.x ?? 0)}, {Math.round(spawn.pos?.y ?? 0)},{' '}
         {Math.round(spawn.pos?.z ?? 0)}
