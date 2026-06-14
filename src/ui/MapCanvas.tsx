@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { SpawnStore } from '../state/store';
 import type { SeqClient } from '../net/client';
-import { SpawnType } from '@gen/seq/v1/events_pb';
+import { SpawnType, type MapGeometry } from '@gen/seq/v1/events_pb';
 import { useSpawnFilterStore, passesSpawnFilter } from '../state/spawnFilterStore';
 import { classNameOf } from './classes';
 import { conHex, conOf } from './concolor';
@@ -207,6 +207,7 @@ export function MapCanvas({
   const panXRef = useRef(0);
   const panYRef = useRef(0);
   const lastZoneRef = useRef('');
+  const lastGeomRef = useRef<MapGeometry | undefined>(undefined);
   // Field-of-view radius around the player, in world units. Matches
   // showeq-c's MapIcons::m_fovDistance default (mapicon.cpp:797).
   const [fovDistance, setFovDistance] = useState(200);
@@ -352,7 +353,7 @@ export function MapCanvas({
     localStorage.setItem('map.heightBelow', String(heightBelow));
   }, [heightBelow]);
 
-  // Detect zone change → reset view + show all layers in the new geometry.
+  // Detect zone change → reset the view (zoom/pan) for the new zone.
   useEffect(() => {
     const z = store.zone();
     if (z === lastZoneRef.current) return;
@@ -360,8 +361,19 @@ export function MapCanvas({
     setZoom(1);
     panXRef.current = 0;
     panYRef.current = 0;
+  }, [tick, store]);
 
+  // Show all layers whenever the geometry itself changes. Keyed on the
+  // geometry object (the store swaps in a fresh one per snapshot/zoneChanged),
+  // NOT on the zone string: the active box's map often arrives in a LATER
+  // same-zone update (its geometry loads after the initial no-geometry
+  // snapshot on promote/box-switch). Gating on the zone string would leave
+  // visibleLayers empty so the map renders blank until a zone change — the
+  // "have to toggle boxes to get the map" bug.
+  useEffect(() => {
     const geom = store.map();
+    if (geom === lastGeomRef.current) return;
+    lastGeomRef.current = geom;
     const layers = new Set<number>();
     if (geom) {
       for (const l of geom.lines) layers.add(l.layer);
