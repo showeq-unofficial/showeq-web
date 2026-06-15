@@ -4,8 +4,33 @@ import {
   EnvelopeSchema,
   MapPackageSchema,
   MapPackagesUpdateSchema,
+  SpawnAddedSchema,
+  SpawnSchema,
+  ZoneChangedSchema,
 } from '@gen/seq/v1/events_pb';
 import { SpawnStore } from './store';
+
+function spawnAddedEnvelope(seq: bigint, id: number, name: string) {
+  return create(EnvelopeSchema, {
+    seq,
+    payload: {
+      case: 'spawnAdded',
+      value: create(SpawnAddedSchema, {
+        spawn: create(SpawnSchema, { id, name }),
+      }),
+    },
+  });
+}
+
+function zoneChangedEnvelope(seq: bigint, zoneShort: string, zoneLong = '') {
+  return create(EnvelopeSchema, {
+    seq,
+    payload: {
+      case: 'zoneChanged',
+      value: create(ZoneChangedSchema, { zoneShort, zoneLong }),
+    },
+  });
+}
 
 // Build a server->client Envelope carrying a MapPackagesUpdate, the same
 // way SeqClient builds ClientEnvelopes — via the generated schemas.
@@ -84,5 +109,35 @@ describe('SpawnStore map packages', () => {
 
     store.apply(mapPackagesEnvelope(2n, list, 'brewall'));
     expect(store.activeMapPackage()).toBe('brewall');
+  });
+});
+
+describe('SpawnStore zoneChanged', () => {
+  it('clears spawns on a real zone change (different zone)', () => {
+    const store = new SpawnStore();
+    store.apply(zoneChangedEnvelope(1n, 'qeynos'));
+    store.apply(spawnAddedEnvelope(2n, 100, 'a guard'));
+    store.apply(spawnAddedEnvelope(3n, 101, 'a citizen'));
+    expect(store.all()).toHaveLength(2);
+
+    // Zoning into a different zone wipes the prior zone's spawns.
+    store.apply(zoneChangedEnvelope(4n, 'qeynos2'));
+    expect(store.zone()).toBe('qeynos2');
+    expect(store.all()).toHaveLength(0);
+  });
+
+  it('keeps spawns on a map-package switch (same zone, new geometry)', () => {
+    const store = new SpawnStore();
+    store.apply(zoneChangedEnvelope(1n, 'qeynos'));
+    store.apply(spawnAddedEnvelope(2n, 100, 'a guard'));
+    store.apply(spawnAddedEnvelope(3n, 101, 'a citizen'));
+    expect(store.all()).toHaveLength(2);
+
+    // SetMapPackage makes the daemon re-emit ZoneChanged for the SAME zone
+    // with fresh geometry — spawns must survive (regression test for the
+    // map-swap-clears-spawns bug).
+    store.apply(zoneChangedEnvelope(4n, 'qeynos'));
+    expect(store.zone()).toBe('qeynos');
+    expect(store.all()).toHaveLength(2);
   });
 });

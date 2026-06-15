@@ -185,13 +185,26 @@ export class SpawnStore {
         if (p.value.zoneServer) this.zoneServer = p.value.zoneServer;
         break;
       }
-      case 'zoneChanged':
+      case 'zoneChanged': {
+        // The daemon reuses ZoneChanged for two distinct events:
+        //   1. a real zone transition (new zone short name) — wipe spawns,
+        //      they belong to the zone we just left;
+        //   2. a map-package switch (same zone, fresh geometry only) — the
+        //      daemon re-emits ZoneChanged after SetMapPackage but keeps its
+        //      own spawn state, so we must keep ours too. Clearing here left
+        //      the map empty until the next per-spawn delta arrived.
+        // Distinguish on the zone short name: only an actual zone change
+        // clears the spawn + spawn-point maps.
+        const zoneChanged = p.value.zoneShort !== this.zoneShort;
         this.zoneShort = p.value.zoneShort;
         this.zoneLong = p.value.zoneLong;
         this.geometry = p.value.geometry;
-        this.spawns.clear();
-        this.spawnPoints.clear();
+        if (zoneChanged) {
+          this.spawns.clear();
+          this.spawnPoints.clear();
+        }
         break;
+      }
       case 'spawnPointAdded':
       case 'spawnPointUpdated': {
         const point = p.value.point;
