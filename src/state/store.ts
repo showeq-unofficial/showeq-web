@@ -7,6 +7,7 @@ import type {
   EqTimeSync,
   FilterRulesUpdate,
   GroupUpdate,
+  InspectAnswer,
   Item,
   ItemCacheTotals,
   MapGeometry,
@@ -159,6 +160,9 @@ export class SpawnStore {
   private moneyTotals: MoneyTotals = { platinum: 0, gold: 0, silver: 0, copper: 0 };
   private expSamples: ExpSample[] = [];
   private lastSeq = 0n;
+  // OP_InspectAnswer results keyed by spawn ID. Overlays real item names
+  // on the visual model codes from the spawn packet. Cleared on zone change.
+  private inspects = new Map<number, InspectAnswer>();
 
   apply(env: Envelope): void {
     this.lastSeq = env.seq;
@@ -202,6 +206,7 @@ export class SpawnStore {
         if (zoneChanged) {
           this.spawns.clear();
           this.spawnPoints.clear();
+          this.inspects.clear();
         }
         break;
       }
@@ -343,6 +348,9 @@ export class SpawnStore {
         this.mapPackagesList = p.value.packages;
         this.activeMapPackageId = p.value.activeId;
         break;
+      case 'inspectAnswer':
+        this.inspects.set(p.value.spawnId, p.value);
+        break;
       default:
         break;
     }
@@ -350,6 +358,7 @@ export class SpawnStore {
 
   all(): Spawn[] { return Array.from(this.spawns.values()); }
   byId(id: number): Spawn | undefined { return this.spawns.get(id); }
+  inspectFor(id: number): InspectAnswer | undefined { return this.inspects.get(id); }
   allSpawnPoints(): SpawnPoint[] { return Array.from(this.spawnPoints.values()); }
   allItems(): Item[] { return Array.from(this.items.values()); }
   totals(): ItemCacheTotals | undefined { return this.itemTotals; }

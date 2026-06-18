@@ -1,28 +1,30 @@
 import { FloatingWindow } from './FloatingWindow';
 import type { SpawnStore } from '../state/store';
 import { classNameOf } from './classes';
+import { equipSlotDisplay, slotLabel } from '../lib/equipModels';
 
-const LUCY_URL = 'https://lucy.allakhazam.com/item.html?id=';
+const SLOT_FULL_NAMES = [
+  "Head", "Chest", "Arms", "Waist", "Gloves", "Legs", "Feet",
+  "Primary", "Secondary",
+];
 
-function ItemRow({ label, itemId, itemName }: {
-  label: string;
-  itemId: number;
-  itemName: string;
+function EquipRow({ slot, modelCode, inspectName }: {
+  slot: number;
+  modelCode: number;
+  inspectName?: string;
 }) {
-  if (!itemId) return null;
-  const display = itemName || `Item #${itemId}`;
+  const modelDisplay = equipSlotDisplay(slot, modelCode);
+  if (!modelDisplay && !inspectName) return null;
+  const label = SLOT_FULL_NAMES[slot] ?? slotLabel(slot);
   return (
     <div className="flex items-baseline gap-1.5">
-      <span className="w-14 shrink-0 text-muted-foreground">{label}</span>
-      <a
-        href={`${LUCY_URL}${itemId}`}
-        target="_blank"
-        rel="noreferrer"
-        title={`Look up on Lucy (item ID ${itemId})`}
-        className="truncate text-blue-400 hover:underline"
-      >
-        {display}
-      </a>
+      <span className="w-16 shrink-0 text-muted-foreground">{label}</span>
+      <span className="truncate">
+        {inspectName || modelDisplay}
+        {inspectName && modelDisplay && modelDisplay !== inspectName && (
+          <span className="ml-1 text-muted-foreground/60">({modelDisplay})</span>
+        )}
+      </span>
     </div>
   );
 }
@@ -37,6 +39,7 @@ export function SpawnInspectPanel({
   onClose: () => void;
 }) {
   const spawn = store.byId(spawnId);
+  const inspect = store.inspectFor(spawnId);
 
   const title = spawn
     ? `${spawn.name || '(unknown)'} (${spawn.level})`
@@ -47,47 +50,85 @@ export function SpawnInspectPanel({
       ? Math.round((spawn.hpCur / spawn.hpMax) * 100)
       : null;
 
+  const models = spawn?.equipModels ?? [];
+
+  // Build inspect name overlay: EQ worn-slot indices. The standard mapping
+  // for what shows in the inspect window:
+  //   slot 0 = ear1, 1 = head, 2 = face, 3 = ear2, 4 = neck, 5 = shoulder,
+  //   6 = arms, 7 = back, 8 = wrist1, 9 = wrist2, 10 = range, 11 = hands,
+  //   12 = primary, 13 = secondary, 14-16 = ring/ring/chest, 17 = legs,
+  //   18 = feet, 19 = waist, 20 = powersource, 21 = ammo, 22 = (unused)
+  // Map spawn visual slots (0-8) to inspect slots for name overlay:
+  const VISUAL_TO_INSPECT: Record<number, number> = {
+    0: 1,   // Head
+    1: 16,  // Chest
+    2: 6,   // Arms
+    3: 19,  // Waist
+    4: 11,  // Gloves
+    5: 17,  // Legs
+    6: 18,  // Feet
+    7: 12,  // Primary
+    8: 13,  // Secondary
+  };
+
+  const anyEquip = models.some((m, i) => i < 9 && equipSlotDisplay(i, m));
+  const hasInspect = !!inspect && inspect.itemNames.some(n => n.length > 0);
+
   return (
     <FloatingWindow
       id={`spawn-inspect-${spawnId}`}
       title={title}
-      defaultSize={{ w: 260, h: 200 }}
-      minSize={{ w: 200, h: 140 }}
+      defaultSize={{ w: 280, h: 240 }}
+      minSize={{ w: 220, h: 160 }}
       onClose={onClose}
     >
       {spawn ? (
         <div className="flex flex-col gap-1 p-2 text-xs text-foreground">
           <div className="flex items-baseline gap-1.5">
-            <span className="w-14 shrink-0 text-muted-foreground">Class</span>
+            <span className="w-16 shrink-0 text-muted-foreground">Class</span>
             <span>{classNameOf(spawn.class) || '—'}</span>
           </div>
           <div className="flex items-baseline gap-1.5">
-            <span className="w-14 shrink-0 text-muted-foreground">Race</span>
+            <span className="w-16 shrink-0 text-muted-foreground">Race</span>
             <span>{spawn.race || '—'}</span>
           </div>
           <div className="flex items-baseline gap-1.5">
-            <span className="w-14 shrink-0 text-muted-foreground">HP</span>
-            <span>
-              {hpPct !== null ? `${hpPct}%` : '—'}
-            </span>
+            <span className="w-16 shrink-0 text-muted-foreground">HP</span>
+            <span>{hpPct !== null ? `${hpPct}%` : '—'}</span>
           </div>
-          {(spawn.primaryItemId > 0 || spawn.secondaryItemId > 0) && (
+
+          {anyEquip && (
             <div className="mt-1 border-t border-border pt-1">
-              <ItemRow
-                label="Primary"
-                itemId={spawn.primaryItemId}
-                itemName={spawn.primaryItemName}
-              />
-              <ItemRow
-                label="Secondary"
-                itemId={spawn.secondaryItemId}
-                itemName={spawn.secondaryItemName}
-              />
+              {Array.from({ length: 9 }, (_, i) => {
+                const inspectIdx = VISUAL_TO_INSPECT[i];
+                const inspectName = inspect?.itemNames[inspectIdx]?.trim() || undefined;
+                return (
+                  <EquipRow
+                    key={i}
+                    slot={i}
+                    modelCode={models[i] ?? 0}
+                    inspectName={inspectName}
+                  />
+                );
+              })}
             </div>
           )}
-          {spawn.primaryItemId === 0 && spawn.secondaryItemId === 0 && (
+
+          {!anyEquip && !hasInspect && (
             <div className="mt-1 border-t border-border pt-1 text-muted-foreground">
-              Nothing held
+              Nothing equipped
+            </div>
+          )}
+
+          {hasInspect && inspect?.bio && (
+            <div className="mt-1 border-t border-border pt-1 italic text-muted-foreground">
+              {inspect.bio}
+            </div>
+          )}
+
+          {!hasInspect && (
+            <div className="mt-1 text-muted-foreground/60">
+              /inspect for item names
             </div>
           )}
         </div>

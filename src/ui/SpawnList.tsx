@@ -16,6 +16,7 @@ import { CategorySelect } from './CategorySelect';
 import { classNameOf } from './classes';
 import { conHex, conOf } from './concolor';
 import { tintForFilterFlags } from './filterflags';
+import { equipSummary, equipSlotDisplay } from '../lib/equipModels';
 
 // Lets row/cell renderers know the current selection (which tracks the
 // in-game target when selectOnTarget is on) so a locked mob you're engaged
@@ -40,10 +41,8 @@ type Row = {
   // TLP mob-lock / FTE: true = locked/unattackable (claimed by another player
   // or the brief post-spawn grey window). Always false on standard Live.
   locked: boolean;
-  primaryItemId: number;
-  primaryItemName: string;
-  secondaryItemId: number;
-  secondaryItemName: string;
+  // Visual equipment model codes (9 slots: head/chest/arms/waist/gloves/legs/feet/primary/secondary)
+  equipModels: number[];
 };
 
 const columnHelper = createColumnHelper<Row>();
@@ -69,20 +68,19 @@ const columns = [
       // Your own target (selection tracks the in-game target) is attackable
       // even when the lock flag is set, so don't badge it as locked.
       const isTarget = info.table.options.meta?.selectedId === info.row.original.id;
-      const { primaryItemId, primaryItemName, secondaryItemId, secondaryItemName } = info.row.original;
-      const heldParts: string[] = [];
-      if (primaryItemId)   heldParts.push(primaryItemName   || `Item #${primaryItemId}`);
-      if (secondaryItemId) heldParts.push(secondaryItemName || `Item #${secondaryItemId}`);
-      const heldTip = heldParts.length > 0 ? `Holding: ${heldParts.join(', ')}` : undefined;
+      const { equipModels } = info.row.original;
+      const equipTip = equipSummary(equipModels) || undefined;
+      const hasWeapon = equipModels.length > 7 &&
+        (equipSlotDisplay(7, equipModels[7]) !== '' || equipSlotDisplay(8, equipModels[8] ?? 0) !== '');
       return (
-        <span className="flex items-center gap-1" title={heldTip}>
+        <span className="flex items-center gap-1" title={equipTip}>
           {info.row.original.locked && !isTarget && (
             <span title="Locked — claimed by another player (unattackable)" aria-label="locked">
               🔒
             </span>
           )}
-          {heldParts.length > 0 && (
-            <span title={heldTip} aria-label="holding item" className="text-amber-400/80">⚔</span>
+          {hasWeapon && (
+            <span title={equipTip} aria-label="holding weapon" className="text-amber-400/80">⚔</span>
           )}
           <span className="truncate">{info.getValue()}</span>
         </span>
@@ -309,10 +307,7 @@ export function SpawnList({
         filterFlags: s.filterFlags,
         type: s.type,
         locked: s.locked ?? false,
-        primaryItemId: s.primaryItemId ?? 0,
-        primaryItemName: s.primaryItemName ?? '',
-        secondaryItemId: s.secondaryItemId ?? 0,
-        secondaryItemName: s.secondaryItemName ?? '',
+        equipModels: s.equipModels ?? [],
       });
     }
     return out;
@@ -343,10 +338,7 @@ export function SpawnList({
       filterFlags: player.filterFlags,
       type: player.type as number,
       locked: false,
-      primaryItemId: 0,
-      primaryItemName: '',
-      secondaryItemId: 0,
-      secondaryItemName: '',
+      equipModels: player.equipModels ?? [],
     };
   }, [store, localTick]);
 
