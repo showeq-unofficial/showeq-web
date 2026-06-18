@@ -349,6 +349,7 @@ export class SpawnStore {
   }
 
   all(): Spawn[] { return Array.from(this.spawns.values()); }
+  byId(id: number): Spawn | undefined { return this.spawns.get(id); }
   allSpawnPoints(): SpawnPoint[] { return Array.from(this.spawnPoints.values()); }
   allItems(): Item[] { return Array.from(this.items.values()); }
   totals(): ItemCacheTotals | undefined { return this.itemTotals; }

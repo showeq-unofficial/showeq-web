@@ -40,6 +40,10 @@ type Row = {
   // TLP mob-lock / FTE: true = locked/unattackable (claimed by another player
   // or the brief post-spawn grey window). Always false on standard Live.
   locked: boolean;
+  primaryItemId: number;
+  primaryItemName: string;
+  secondaryItemId: number;
+  secondaryItemName: string;
 };
 
 const columnHelper = createColumnHelper<Row>();
@@ -65,12 +69,20 @@ const columns = [
       // Your own target (selection tracks the in-game target) is attackable
       // even when the lock flag is set, so don't badge it as locked.
       const isTarget = info.table.options.meta?.selectedId === info.row.original.id;
+      const { primaryItemId, primaryItemName, secondaryItemId, secondaryItemName } = info.row.original;
+      const heldParts: string[] = [];
+      if (primaryItemId)   heldParts.push(primaryItemName   || `Item #${primaryItemId}`);
+      if (secondaryItemId) heldParts.push(secondaryItemName || `Item #${secondaryItemId}`);
+      const heldTip = heldParts.length > 0 ? `Holding: ${heldParts.join(', ')}` : undefined;
       return (
-        <span className="flex items-center gap-1">
+        <span className="flex items-center gap-1" title={heldTip}>
           {info.row.original.locked && !isTarget && (
             <span title="Locked — claimed by another player (unattackable)" aria-label="locked">
               🔒
             </span>
+          )}
+          {heldParts.length > 0 && (
+            <span title={heldTip} aria-label="holding item" className="text-amber-400/80">⚔</span>
           )}
           <span className="truncate">{info.getValue()}</span>
         </span>
@@ -147,10 +159,12 @@ export function SpawnList({
   store,
   selectedId,
   onSelect,
+  onInspect,
 }: {
   store: SpawnStore;
   selectedId: number | null;
   onSelect: (id: number | null) => void;
+  onInspect?: (id: number) => void;
 }) {
   const [sorting, setSorting] = useState<SortingState>([
     { id: 'distance', desc: false },
@@ -295,6 +309,10 @@ export function SpawnList({
         filterFlags: s.filterFlags,
         type: s.type,
         locked: s.locked ?? false,
+        primaryItemId: s.primaryItemId ?? 0,
+        primaryItemName: s.primaryItemName ?? '',
+        secondaryItemId: s.secondaryItemId ?? 0,
+        secondaryItemName: s.secondaryItemName ?? '',
       });
     }
     return out;
@@ -323,8 +341,12 @@ export function SpawnList({
       distance: 0,
       conColor: conHex(conOf(lvl, lvl)),
       filterFlags: player.filterFlags,
-      type: player.type,
+      type: player.type as number,
       locked: false,
+      primaryItemId: 0,
+      primaryItemName: '',
+      secondaryItemId: 0,
+      secondaryItemName: '',
     };
   }, [store, localTick]);
 
@@ -773,6 +795,7 @@ export function SpawnList({
                 <tr
                   key={r.id}
                   onClick={() => onSelect(r.original.id)}
+                  onDoubleClick={() => onInspect?.(r.original.id)}
                   style={{ height: ROW_HEIGHT }}
                   className={
                     'cursor-pointer border-b border-border ' +

@@ -30,6 +30,7 @@ import { PreferencesPanel } from './PreferencesPanel';
 import { RailDivider, CollapsedRail } from './RailDivider';
 import { SettingsModal } from './SettingsModal';
 import { SpawnList } from './SpawnList';
+import { SpawnInspectPanel } from './SpawnInspectPanel';
 import { SpawnPointList } from './SpawnPointList';
 import { PlayerPanel } from './PlayerPanel';
 import { LootWindow } from './LootWindow';
@@ -140,6 +141,7 @@ export function App() {
   const [tick, setTick] = useState(0);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [selectVersion, setSelectVersion] = useState(0);
+  const [inspectId, setInspectId] = useState<number | null>(null);
   // Panel layout state lives in the zustand store so unrelated
   // re-renders (e.g. tick churn) don't have to thread its setters
   // through every callback.
@@ -469,7 +471,7 @@ export function App() {
   const renderPanelBody = (key: PanelKey): ReactNode => {
     switch (key) {
       case 'spawns':
-        return <SpawnList store={store} selectedId={selectedId} onSelect={onSelect} />;
+        return <SpawnList store={store} selectedId={selectedId} onSelect={onSelect} onInspect={setInspectId} />;
       case 'spawnPoints':
         return <SpawnPointList store={store} tick={tick} client={clientRef.current} />;
       case 'stats':
@@ -772,6 +774,13 @@ export function App() {
             {renderPanelBody(k)}
           </FloatingWindow>
         ))}
+      {inspectId !== null && (
+        <SpawnInspectPanel
+          spawnId={inspectId}
+          store={store}
+          onClose={() => setInspectId(null)}
+        />
+      )}
       {snapHint !== null && (
         <SnapZones
           leftRailRef={leftRailRef}
