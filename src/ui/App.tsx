@@ -778,6 +778,7 @@ export function App() {
         <SpawnInspectPanel
           spawnId={inspectId}
           store={store}
+          tick={tick}
           onClose={() => setInspectId(null)}
         />
       )}

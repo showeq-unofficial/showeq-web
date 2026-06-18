@@ -56,6 +56,16 @@ export function classNameOf(id: number): string {
   return CLASSES[id] ?? '';
 }
 
+const CLASS_SHORT: Record<number, string> = {
+  1: 'WAR', 2: 'CLR', 3: 'PAL', 4: 'RNG', 5: 'SHD', 6: 'DRU',
+  7: 'MNK', 8: 'BRD', 9: 'ROG', 10: 'SHM', 11: 'NEC', 12: 'WIZ',
+  13: 'MAG', 14: 'ENC', 15: 'BST', 16: 'BER',
+};
+
+export function classShortOf(id: number): string {
+  return CLASS_SHORT[id] ?? classNameOf(id);
+}
+
 // Pure-melee classes with no mana pool. GM variants share the parent
 // class' resource model. Bard has mana (used for songs).
 const NO_MANA_CLASSES: ReadonlySet<number> = new Set([

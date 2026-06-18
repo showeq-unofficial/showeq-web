@@ -1,6 +1,7 @@
 import { FloatingWindow } from './FloatingWindow';
 import type { SpawnStore } from '../state/store';
 import { classNameOf } from './classes';
+import { raceName } from '../lib/races';
 import { equipSlotDisplay, slotLabel } from '../lib/equipModels';
 
 const SLOT_FULL_NAMES = [
@@ -32,12 +33,15 @@ function EquipRow({ slot, modelCode, inspectName }: {
 export function SpawnInspectPanel({
   spawnId,
   store,
+  tick,
   onClose,
 }: {
   spawnId: number;
   store: SpawnStore;
+  tick: number;
   onClose: () => void;
 }) {
+  void tick; // drives re-render when inspect data arrives
   const spawn = store.byId(spawnId);
   const inspect = store.inspectFor(spawnId);
 
@@ -90,7 +94,7 @@ export function SpawnInspectPanel({
           </div>
           <div className="flex items-baseline gap-1.5">
             <span className="w-16 shrink-0 text-muted-foreground">Race</span>
-            <span>{spawn.race || '—'}</span>
+            <span>{spawn.race ? raceName(spawn.race) : '—'}</span>
           </div>
           <div className="flex items-baseline gap-1.5">
             <span className="w-16 shrink-0 text-muted-foreground">HP</span>
