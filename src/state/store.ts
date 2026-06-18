@@ -38,6 +38,15 @@ export type SkillLogEntry = {
   localTs: number;
 };
 
+// One experience gain event received from a Player::expGained kill tick.
+export type ExpTick = {
+  mobName: string;
+  mobLevel: number;
+  xpGained: number;  // 0-100000 per-level scale (1000 = 0.1% of a level)
+  zoneName: string;
+  localTs: number;
+};
+
 // One loot line synthesized from a chatColor === 286 (CC_User_Loot)
 // chat event. `looter` is the empty string for "You have looted a X"
 // (template 467) and the looter's name for group/raid lines like
@@ -74,6 +83,7 @@ const CHAT_HISTORY_LIMIT = 500;
 const COMBAT_HISTORY_LIMIT = 500;
 const SKILL_LOG_LIMIT = 200;
 const LOOT_LOG_LIMIT = 1000;
+const EXP_LOG_LIMIT = 1000;
 // CC_User_Loot from showeq-daemon-quarm/src/everquest.h. Loot lines from
 // the server arrive as OP_FormattedMessage with this colour.
 const CHAT_COLOR_LOOT = 286;
@@ -159,6 +169,7 @@ export class SpawnStore {
   private lootLog: LootEntry[] = [];
   private moneyTotals: MoneyTotals = { platinum: 0, gold: 0, silver: 0, copper: 0 };
   private expSamples: ExpSample[] = [];
+  private expLog: ExpTick[] = [];
   private lastSeq = 0n;
   // OP_InspectAnswer results keyed by spawn ID. Overlays real item names
   // on the visual model codes from the spawn packet. Cleared on zone change.
@@ -292,6 +303,19 @@ export class SpawnStore {
         this.recordExpSample(cur);
         break;
       }
+      case 'exp': {
+        this.expLog.push({
+          mobName:  p.value.mobName,
+          mobLevel: p.value.mobLevel,
+          xpGained: p.value.xpGained,
+          zoneName: p.value.zoneName,
+          localTs:  Date.now(),
+        });
+        if (this.expLog.length > EXP_LOG_LIMIT) {
+          this.expLog.splice(0, this.expLog.length - EXP_LOG_LIMIT);
+        }
+        break;
+      }
       case 'chat': {
         this.chat.push({ ...p.value, seq: env.seq });
         if (this.chat.length > CHAT_HISTORY_LIMIT) {
@@ -393,6 +417,8 @@ export class SpawnStore {
     this.lootLog = [];
     this.moneyTotals = { platinum: 0, gold: 0, silver: 0, copper: 0 };
   }
+  expLogEntries(): ReadonlyArray<ExpTick> { return this.expLog; }
+  clearExpLog(): void { this.expLog = []; }
 
   private parseLootChat(text: string, chatColor: number): void {
     if (chatColor === CHAT_COLOR_LOOT) {

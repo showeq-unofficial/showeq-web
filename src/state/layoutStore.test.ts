@@ -188,11 +188,11 @@ describe('layoutStore — dockToSlot', () => {
 
   it('inserts at a middle slot', async () => {
     const { useLayoutStore } = await loadStore();
-    // Default right order: stats, buffs, group, chat, combat
+    // Default right order: stats, buffs, group, chat, combat, expLog
     useLayoutStore.getState().undock('chat');
     useLayoutStore.getState().dockToSlot('chat', 'right', 1);
     expect(useLayoutStore.getState().panelOrder.right).toEqual(
-      ['stats', 'chat', 'buffs', 'group', 'combat'],
+      ['stats', 'chat', 'buffs', 'group', 'combat', 'expLog'],
     );
   });
 
