@@ -127,16 +127,17 @@ class PosSmoother {
       cur.prevY = cp.y;
       cur.targetX = x;
       cur.targetY = y;
-      // Use the actual inter-update interval as the lerp duration so the
-      // animation finishes about when the next update arrives.
-      // Min 50ms: prevents a near-instant snap when two sources fire
-      //   within a few ms of each other (DIR_Client + server echo).
-      // Max 2000ms: live captures show NPC update rate is ~1-2 Hz; capping
-      //   at 2s means the dot glides continuously to the new position
-      //   instead of arriving early and pausing (stop-and-go). Jumps large
-      //   enough to look like teleports already snap via TELEPORT_SNAP_DIST.
+      // Set lerp duration to 2× the observed inter-update interval so the
+      // animation is always still running when the next update arrives.
+      // Using elapsed×1 caused stop-and-go: the lerp would finish early
+      // when a duplicate update (two handlers firing for the same packet)
+      // reset elapsed to ~0ms, making durationMs=50ms and leaving a
+      // ~300ms hold before the next real update.  With 2× the lerp is
+      // always mid-flight when the next real update interrupts it.
+      // Min 50ms: floor for near-simultaneous duplicate pairs.
+      // Max 2000ms: prevents multi-second glides after long idle periods.
       const elapsed = now - cur.updateTimeMs;
-      cur.durationMs = Math.min(2000, Math.max(50, elapsed));
+      cur.durationMs = Math.min(2000, Math.max(50, elapsed * 2));
       cur.updateTimeMs = now;
     }
     for (const id of this.positions.keys()) {
