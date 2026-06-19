@@ -1,3 +1,4 @@
+import { RefreshCw } from 'lucide-react';
 import { useBoxStore } from '../state/boxStore';
 
 // Header dropdown showing every EQ client the daemon has observed
@@ -6,6 +7,10 @@ import { useBoxStore } from '../state/boxStore';
 // header for the single-client case. Selection emits SetActiveBox;
 // the daemon broadcasts a fresh BoxListUpdated with the new
 // active_box_id which flows back through useBoxStore.
+//
+// The refresh button re-sends SetActiveBox with the current box ID.
+// The daemon treats a same-box SetActiveBox as a manual re-snapshot
+// request so the client can resync without a box-swap dance.
 
 interface Props {
   onChange: (boxId: string) => void;
@@ -38,6 +43,14 @@ export function BoxPicker({ onChange }: Props) {
           );
         })}
       </select>
+      <button
+        type="button"
+        title="Refresh current box"
+        onClick={() => onChange(activeBoxId)}
+        className="flex items-center text-foreground/50 hover:text-foreground transition-colors"
+      >
+        <RefreshCw size={12} />
+      </button>
     </label>
   );
 }
