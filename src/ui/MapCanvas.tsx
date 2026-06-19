@@ -70,6 +70,14 @@ type SpawnHit = { id: number; x: number; y: number; clickable?: boolean };
 // dots visibly teleport on each update. We lerp from the previously
 // rendered position to the latest target across the inter-update
 // interval, so motion looks continuous at the render rate.
+//
+// Large position jumps (gates, summons, respawns at a distant point)
+// snap immediately: lerping 500 EQ units over 600ms is indistinguishable
+// from "teleporting with a smooth effect" and looks wrong. The threshold
+// comfortably clears fast mounts (< 50 EQ/s × a few seconds) but fires
+// on any genuine in-game teleport (typically 500+ EQ units).
+const TELEPORT_SNAP_DIST = 150;
+
 type SmoothedPos = {
   prevX: number;
   prevY: number;
@@ -100,9 +108,20 @@ class PosSmoother {
         continue;
       }
       if (cur.targetX === x && cur.targetY === y) continue;
-      // Lerp from where we are *visually right now* so a fresh update
-      // mid-animation slides cleanly instead of snapping back to the
-      // prior `prev` anchor.
+      const dx = x - cur.targetX;
+      const dy = y - cur.targetY;
+      // Gate / summon / distant respawn: snap immediately. Lerping across
+      // hundreds of EQ units looks wrong (slow glide-teleport). Snap is
+      // more honest — the spawn genuinely teleported.
+      if (dx * dx + dy * dy > TELEPORT_SNAP_DIST * TELEPORT_SNAP_DIST) {
+        cur.prevX = x; cur.prevY = y;
+        cur.targetX = x; cur.targetY = y;
+        cur.updateTimeMs = now; cur.durationMs = 0;
+        continue;
+      }
+      // Normal step: lerp from where we are *visually right now* so a
+      // fresh update mid-animation slides cleanly instead of snapping
+      // back to the prior `prev` anchor.
       const cp = this.posInternal(cur, now);
       cur.prevX = cp.x;
       cur.prevY = cp.y;
