@@ -131,12 +131,12 @@ class PosSmoother {
       // animation finishes about when the next update arrives.
       // Min 50ms: prevents a near-instant snap when two sources fire
       //   within a few ms of each other (DIR_Client + server echo).
-      // Max 300ms: avoids a slow glide-in when an NPC starts moving after
-      //   a long pause (that 1-2s elapsed would make the first step look
-      //   sluggish). Large teleport-scale jumps already snap via the
-      //   TELEPORT_SNAP_DIST check above, so the cap can be short.
+      // Max 2000ms: live captures show NPC update rate is ~1-2 Hz; capping
+      //   at 2s means the dot glides continuously to the new position
+      //   instead of arriving early and pausing (stop-and-go). Jumps large
+      //   enough to look like teleports already snap via TELEPORT_SNAP_DIST.
       const elapsed = now - cur.updateTimeMs;
-      cur.durationMs = Math.min(300, Math.max(50, elapsed));
+      cur.durationMs = Math.min(2000, Math.max(50, elapsed));
       cur.updateTimeMs = now;
     }
     for (const id of this.positions.keys()) {
