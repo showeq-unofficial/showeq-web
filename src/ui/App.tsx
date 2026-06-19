@@ -50,6 +50,7 @@ import { useSpawnFilterStore } from '../state/spawnFilterStore';
 import { cueKeyForFilterFlags } from '../state/alertsStore';
 import { playFilterCue } from '../lib/audioCue';
 import { useBuffWarnings } from '../lib/useBuffWarnings';
+import { useWakeLock } from '../lib/useWakeLock';
 import { AlertsPanel } from './AlertsPanel';
 
 type ConnStatus = 'disconnected' | 'connecting' | 'connected';
@@ -229,6 +230,7 @@ export function App() {
   // pulling this into App keeps the cue audible even with the panel
   // hidden.
   useBuffWarnings(store);
+  useWakeLock();
 
   // Keep the spawn-filter store's live player level in sync so the "±Me"
   // relative level band can resolve. Guarded so the 1Hz tick only writes
