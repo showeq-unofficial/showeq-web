@@ -65,28 +65,16 @@ const DRAG_THRESHOLD = 4;
 // without letting them steal selection off a nearby mob.
 type SpawnHit = { id: number; x: number; y: number; clickable?: boolean };
 
-// Empirical dead-reckoning coefficient ported from legacy showeq's
-// Spawn::calcPos (spawn.cpp). The wire encodes velocity as a scaled
-// integer (OP_NpcMoveUpdate / OP_ClientUpdate delta fields, already
-// right-shifted by 2 before reaching the proto). Multiplied by elapsed
-// milliseconds this yields the expected position change in EQ units.
-// Both base position and velocity arrive in screen convention (+X=East,
-// +Y=South) from the daemon, so no additional sign fixup is needed here.
-const VELOCITY_COEFF = 0.0013;
-
 // Per-spawn position with linear interpolation between the last two
-// daemon updates, plus velocity-based dead reckoning between updates.
-// Legacy showeq uses the same dead reckoning in Spawn::calcPos; without
-// it NPC dots visibly teleport on each update (especially at ≤2 Hz).
-// We lerp from the previously rendered position toward the dead-reckoned
-// prediction, so motion looks continuous at the render rate.
+// daemon updates. Daemon ships position updates at ~5 Hz; without lerp
+// dots visibly teleport on each update. We lerp from the previously
+// rendered position to the latest target across the inter-update
+// interval, so motion looks continuous at the render rate.
 type SmoothedPos = {
   prevX: number;
   prevY: number;
   targetX: number;
   targetY: number;
-  vx: number;          // velocity for dead reckoning (proto Pos.vx field)
-  vy: number;
   updateTimeMs: number;
   durationMs: number;  // 0 = snap (no animation)
 };
@@ -98,34 +86,28 @@ class PosSmoother {
   // disappeared ids. `players` is folded into the same map so the player
   // marker (drawn separately from the spawn loop) interpolates in lock
   // step with everyone else.
-  sync(ids: Iterable<{ id: number; x: number; y: number; vx: number; vy: number }>, now: number) {
+  sync(ids: Iterable<{ id: number; x: number; y: number }>, now: number) {
     const seen = new Set<number>();
-    for (const { id, x, y, vx, vy } of ids) {
+    for (const { id, x, y } of ids) {
       seen.add(id);
       const cur = this.positions.get(id);
       if (!cur) {
         this.positions.set(id, {
           prevX: x, prevY: y,
           targetX: x, targetY: y,
-          vx, vy,
           updateTimeMs: now, durationMs: 0,
         });
         continue;
       }
-      // Always absorb the latest velocity even without a position change
-      // (direction changes can arrive before the position has moved).
-      if (cur.vx !== vx || cur.vy !== vy) { cur.vx = vx; cur.vy = vy; }
       if (cur.targetX === x && cur.targetY === y) continue;
-      // Lerp from where we are *visually right now* (which may already be
-      // dead-reckoned forward) so a fresh update slides cleanly instead of
-      // snapping back to the prior anchor.
+      // Lerp from where we are *visually right now* so a fresh update
+      // mid-animation slides cleanly instead of snapping back to the
+      // prior `prev` anchor.
       const cp = this.posInternal(cur, now);
       cur.prevX = cp.x;
       cur.prevY = cp.y;
       cur.targetX = x;
       cur.targetY = y;
-      cur.vx = vx;
-      cur.vy = vy;
       // Use the actual inter-update interval as the lerp duration so the
       // animation finishes about when the next update arrives. Clamp:
       // too short = back to teleporting; too long = dots lag the truth
@@ -145,20 +127,12 @@ class PosSmoother {
   }
 
   private posInternal(sp: SmoothedPos, now: number) {
+    if (sp.durationMs <= 0) return { x: sp.targetX, y: sp.targetY };
     const elapsed = now - sp.updateTimeMs;
-    // Dead-reckoned target: received position extrapolated by velocity.
-    // After the lerp completes (t≥1) we track this purely, so the dot
-    // keeps gliding until the next server update corrects it.
-    const drX = sp.targetX + sp.vx * VELOCITY_COEFF * elapsed;
-    const drY = sp.targetY + sp.vy * VELOCITY_COEFF * elapsed;
-    if (sp.durationMs <= 0) return { x: drX, y: drY };
-    // Lerp from the previous visual position toward the dead-reckoned
-    // prediction. At t=0 we're at prevX/Y; at t=1 we're fully on the
-    // dead-reckoning track and stay there until the next update.
     const t = Math.min(1, Math.max(0, elapsed / sp.durationMs));
     return {
-      x: sp.prevX + (drX - sp.prevX) * t,
-      y: sp.prevY + (drY - sp.prevY) * t,
+      x: sp.prevX + (sp.targetX - sp.prevX) * t,
+      y: sp.prevY + (sp.targetY - sp.prevY) * t,
     };
   }
 }
@@ -632,7 +606,7 @@ export function MapCanvas({
         (function* () {
           for (const s of spawns) {
             if (!s.pos) continue;
-            yield { id: s.id, x: s.pos.x, y: s.pos.y, vx: s.pos.vx, vy: s.pos.vy };
+            yield { id: s.id, x: s.pos.x, y: s.pos.y };
           }
         })(),
         animNow,
