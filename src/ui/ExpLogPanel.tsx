@@ -86,7 +86,9 @@ export function ExpLogPanel({ store, tick }: { store: SpawnStore; tick: number }
                     {fmtTime(e.localTs)}
                   </td>
                   <td className="max-w-[120px] truncate px-1 py-px">
-                    {e.mobName || '(unknown)'}
+                    {e.mobName
+                      ? e.mobName
+                      : <span className="text-muted-foreground italic">(group kill)</span>}
                   </td>
                   <td className="px-1 py-px text-right">
                     {e.mobLevel > 0 ? e.mobLevel : '?'}
