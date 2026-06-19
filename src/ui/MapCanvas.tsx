@@ -128,11 +128,15 @@ class PosSmoother {
       cur.targetX = x;
       cur.targetY = y;
       // Use the actual inter-update interval as the lerp duration so the
-      // animation finishes about when the next update arrives. Clamp:
-      // too short = back to teleporting; too long = dots lag the truth
-      // across pauses or zone-load gaps.
+      // animation finishes about when the next update arrives.
+      // Min 50ms: prevents a near-instant snap when two sources fire
+      //   within a few ms of each other (DIR_Client + server echo).
+      // Max 300ms: avoids a slow glide-in when an NPC starts moving after
+      //   a long pause (that 1-2s elapsed would make the first step look
+      //   sluggish). Large teleport-scale jumps already snap via the
+      //   TELEPORT_SNAP_DIST check above, so the cap can be short.
       const elapsed = now - cur.updateTimeMs;
-      cur.durationMs = Math.min(600, Math.max(80, elapsed));
+      cur.durationMs = Math.min(300, Math.max(50, elapsed));
       cur.updateTimeMs = now;
     }
     for (const id of this.positions.keys()) {
