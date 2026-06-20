@@ -65,17 +65,20 @@ const DRAG_THRESHOLD = 4;
 // without letting them steal selection off a nearby mob.
 type SpawnHit = { id: number; x: number; y: number; clickable?: boolean };
 
-// Per-spawn position with linear interpolation between the last two
-// daemon updates. Daemon ships position updates at ~5 Hz; without lerp
-// dots visibly teleport on each update. We lerp from the previously
-// rendered position to the latest target across the inter-update
-// interval, so motion looks continuous at the render rate.
-//
-// Large position jumps (gates, summons, respawns at a distant point)
-// snap immediately: lerping 500 EQ units over 600ms is indistinguishable
-// from "teleporting with a smooth effect" and looks wrong. The threshold
-// comfortably clears fast mounts (< 50 EQ/s × a few seconds) but fires
-// on any genuine in-game teleport (typically 500+ EQ units).
+// Exponential smoothing time constant (ms). The visual position closes
+// (1 − 1/e) ≈ 63% of the gap to the target every TAU milliseconds,
+// meaning it asymptotically approaches but never "arrives". This removes
+// the stop-and-go produced by linear lerp: a linear lerp reaches 100% at
+// durationMs and holds until the next update; exponential always moves,
+// so there is no hold even when the next update is late or when the player
+// pauses. Steady-state lag ≈ TAU / interval × step_size; at TAU=100ms and
+// the observed avg 358ms player interval, lag ≈ 0.5 EQ — sub-pixel.
+const LERP_TAU = 100; // ms
+
+// Large jumps (gate, summon, zone-wide patrol restart) snap immediately.
+// Lerping 500 EQ units looks like a slow glide-teleport; snapping is more
+// honest. Threshold clears fast mounts (< 50 EQ/s) but catches any genuine
+// in-game teleport (typically 500+ EQ units from the prior position).
 const TELEPORT_SNAP_DIST = 150;
 
 type SmoothedPos = {
@@ -84,7 +87,6 @@ type SmoothedPos = {
   targetX: number;
   targetY: number;
   updateTimeMs: number;
-  durationMs: number;  // 0 = snap (no animation)
 };
 
 class PosSmoother {
@@ -100,47 +102,25 @@ class PosSmoother {
       seen.add(id);
       const cur = this.positions.get(id);
       if (!cur) {
-        this.positions.set(id, {
-          prevX: x, prevY: y,
-          targetX: x, targetY: y,
-          updateTimeMs: now, durationMs: 0,
-        });
+        this.positions.set(id, { prevX: x, prevY: y, targetX: x, targetY: y, updateTimeMs: now });
         continue;
       }
       if (cur.targetX === x && cur.targetY === y) continue;
       const dx = x - cur.targetX;
       const dy = y - cur.targetY;
-      // Gate / summon / distant respawn: snap immediately. Lerping across
-      // hundreds of EQ units looks wrong (slow glide-teleport). Snap is
-      // more honest — the spawn genuinely teleported.
       if (dx * dx + dy * dy > TELEPORT_SNAP_DIST * TELEPORT_SNAP_DIST) {
         cur.prevX = x; cur.prevY = y;
         cur.targetX = x; cur.targetY = y;
-        cur.updateTimeMs = now; cur.durationMs = 0;
+        cur.updateTimeMs = now;
         continue;
       }
-      // Normal step: lerp from where we are *visually right now* so a
-      // fresh update mid-animation slides cleanly instead of snapping
-      // back to the prior `prev` anchor.
+      // Capture current visual position as the new exponential origin so
+      // the transition is seamless regardless of when the update arrives.
       const cp = this.posInternal(cur, now);
       cur.prevX = cp.x;
       cur.prevY = cp.y;
       cur.targetX = x;
       cur.targetY = y;
-      // Set lerp duration to 2× the observed inter-update interval.
-      // With the daemon duplicate fix in place there are no 0ms gaps, so
-      // the 2× multiplier is safe and solves the remaining jerkiness:
-      // intervals are highly variable (77–1160ms observed) and using 1×
-      // causes the lerp to finish early when the next interval is longer
-      // than the last, producing a visible hold (e.g. 559ms→1160ms gap
-      // would hold for ~600ms with 1×; with 2× the lerp still runs and
-      // the hold shrinks to ~40ms). The visual lags ~50% of one interval
-      // behind truth (~175ms at avg 358ms player rate) — imperceptible
-      // on a map overlay, eliminates the stop-and-go feel.
-      // Min 50ms: floor for any residual close-together messages.
-      // Max 2000ms: caps the first step after a long idle period.
-      const elapsed = now - cur.updateTimeMs;
-      cur.durationMs = Math.min(2000, Math.max(50, elapsed * 2));
       cur.updateTimeMs = now;
     }
     for (const id of this.positions.keys()) {
@@ -154,12 +134,11 @@ class PosSmoother {
   }
 
   private posInternal(sp: SmoothedPos, now: number) {
-    if (sp.durationMs <= 0) return { x: sp.targetX, y: sp.targetY };
     const elapsed = now - sp.updateTimeMs;
-    const t = Math.min(1, Math.max(0, elapsed / sp.durationMs));
+    const alpha = 1 - Math.exp(-elapsed / LERP_TAU);
     return {
-      x: sp.prevX + (sp.targetX - sp.prevX) * t,
-      y: sp.prevY + (sp.targetY - sp.prevY) * t,
+      x: sp.prevX + (sp.targetX - sp.prevX) * alpha,
+      y: sp.prevY + (sp.targetY - sp.prevY) * alpha,
     };
   }
 }
