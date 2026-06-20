@@ -257,6 +257,7 @@ export function passesSpawnFilter(
   state: SpawnFilterPredicateState,
 ): boolean {
   if (s.type === SpawnType.DOOR || s.type === SpawnType.DROP) return false;
+  if ((s.name ?? '').toLowerCase().endsWith("'s mount")) return false;
   if (state.hideFiltered && (s.filterFlags & FILTERED_BIT) !== 0) return false;
   const bucket = spawnTypeBucket(s.type);
   if (bucket !== 'other' && !state.types[bucket]) return false;
