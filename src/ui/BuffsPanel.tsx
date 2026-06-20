@@ -21,7 +21,8 @@ export function BuffsPanel({ store, tick }: { store: SpawnStore; tick: number })
   }, []);
 
   const buffs = store.buffsState();
-  if (!buffs || buffs.buffs.length === 0) {
+  const visibleBuffs = buffs?.buffs.filter((b) => !b.isSong) ?? [];
+  if (!buffs || visibleBuffs.length === 0) {
     return (
       <div className="px-2 py-2 text-xs text-muted-foreground">
         No active buffs.
@@ -37,7 +38,7 @@ export function BuffsPanel({ store, tick }: { store: SpawnStore; tick: number })
 
   return (
     <div className="flex flex-col py-1 text-xs">
-      {buffs.buffs.map((b, i) => {
+      {visibleBuffs.map((b, i) => {
         const remaining = b.durationS - elapsedSec;
         // Permanent buffs come over with duration_s <= 0 in some cases;
         // distinguish from "expired but still in list" by looking at
