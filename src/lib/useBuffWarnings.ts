@@ -28,6 +28,7 @@ export function useBuffWarnings(store: SpawnStore): void {
       const elapsed = Math.max(0, (Date.now() - cap) / 1000);
       const seen = new Set<number>();
       for (const b of buffs.buffs) {
+        if (b.isSong) continue;
         if (b.durationS <= 0) continue;
         seen.add(b.spellId);
         const remaining = b.durationS - elapsed;
