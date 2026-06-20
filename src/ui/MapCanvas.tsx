@@ -127,15 +127,20 @@ class PosSmoother {
       cur.prevY = cp.y;
       cur.targetX = x;
       cur.targetY = y;
-      // Use the observed inter-update interval as the lerp duration so the
-      // animation finishes as the next update arrives.
-      // Min 50ms: floor to avoid a near-instant snap on back-to-back msgs.
-      // Max 2000ms: live captures show NPC update rate ~1-2 Hz; cap at 2s
-      //   so after a long pause the first step doesn't slow-glide in.
-      //   Jumps ≥ TELEPORT_SNAP_DIST already snap, so the cap only covers
-      //   normal movement.
+      // Set lerp duration to 2× the observed inter-update interval.
+      // With the daemon duplicate fix in place there are no 0ms gaps, so
+      // the 2× multiplier is safe and solves the remaining jerkiness:
+      // intervals are highly variable (77–1160ms observed) and using 1×
+      // causes the lerp to finish early when the next interval is longer
+      // than the last, producing a visible hold (e.g. 559ms→1160ms gap
+      // would hold for ~600ms with 1×; with 2× the lerp still runs and
+      // the hold shrinks to ~40ms). The visual lags ~50% of one interval
+      // behind truth (~175ms at avg 358ms player rate) — imperceptible
+      // on a map overlay, eliminates the stop-and-go feel.
+      // Min 50ms: floor for any residual close-together messages.
+      // Max 2000ms: caps the first step after a long idle period.
       const elapsed = now - cur.updateTimeMs;
-      cur.durationMs = Math.min(2000, Math.max(50, elapsed));
+      cur.durationMs = Math.min(2000, Math.max(50, elapsed * 2));
       cur.updateTimeMs = now;
     }
     for (const id of this.positions.keys()) {
