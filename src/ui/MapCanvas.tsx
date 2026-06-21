@@ -987,7 +987,6 @@ export function MapCanvas({
         const headingDegrees = player.pos.heading ?? 0;
         const angle = ((360 - headingDegrees - 180) / 360) * 2 * Math.PI;
 
-        const playerCircleRadius = 4;
         const fovHalfAngle = (Math.PI * 2) * 0.25 / 2; // 45° each side
 
         // Center line — yellow.
@@ -1001,26 +1000,17 @@ export function MapCanvas({
         );
         ctx.stroke();
 
-        // Cone edges — red. Two lines starting from opposite sides of the
-        // player circle, spreading at ±fovHalfAngle from heading.
-        let startOffsetX = Math.sin(angle - Math.PI / 2) * playerCircleRadius;
-        let startOffsetY = Math.cos(angle - Math.PI / 2) * playerCircleRadius;
-        let coneOffset = fovHalfAngle;
+        // Cone edges — red. Each line starts at the circle perimeter in its
+        // own direction so neither edge visually exits the circle.
+        const circleR = 5;
         ctx.strokeStyle = '#ff3030';
         ctx.lineWidth = 1.25;
-        for (let n = 0; n < 2; n++) {
-          const sx = px + startOffsetX;
-          const sy = py + startOffsetY;
+        for (const side of [-1, 1]) {
+          const edgeAngle = angle + side * fovHalfAngle;
           ctx.beginPath();
-          ctx.moveTo(sx, sy);
-          ctx.lineTo(
-            sx + Math.sin(angle - coneOffset) * scaledFov,
-            sy + Math.cos(angle - coneOffset) * scaledFov,
-          );
+          ctx.moveTo(px + Math.sin(edgeAngle) * circleR, py + Math.cos(edgeAngle) * circleR);
+          ctx.lineTo(px + Math.sin(edgeAngle) * scaledFov, py + Math.cos(edgeAngle) * scaledFov);
           ctx.stroke();
-          startOffsetX = -startOffsetX;
-          startOffsetY = -startOffsetY;
-          coneOffset = -coneOffset;
         }
       }
 
