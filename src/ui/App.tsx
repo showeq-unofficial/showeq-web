@@ -146,6 +146,7 @@ export function App() {
   const [tick, setTick] = useState(0);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [selectVersion, setSelectVersion] = useState(0);
+  const [panToXY, setPanToXY] = useState<{ x: number; y: number; v: number } | null>(null);
   const [inspectId, setInspectId] = useState<number | null>(null);
   // Panel layout state lives in the zustand store so unrelated
   // re-renders (e.g. tick churn) don't have to thread its setters
@@ -479,7 +480,9 @@ export function App() {
       case 'spawns':
         return <SpawnList store={store} selectedId={selectedId} onSelect={onSelect} onInspect={setInspectId} />;
       case 'spawnPoints':
-        return <SpawnPointList store={store} tick={tick} client={clientRef.current} />;
+        return <SpawnPointList store={store} tick={tick} client={clientRef.current}
+          onPanTo={(x, y) => setPanToXY((prev) => ({ x, y, v: (prev?.v ?? 0) + 1 }))}
+        />;
       case 'stats':
         return (
           <PlayerPanel
@@ -692,6 +695,7 @@ export function App() {
             trackPlayer={trackPlayer}
             onTrackPlayerChange={updateTrackPlayer}
             smoothMovement={smoothMovement}
+            panToXY={panToXY}
           />
         </div>
         {!showRightRail && rightHasPanels && (

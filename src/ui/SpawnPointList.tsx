@@ -109,11 +109,15 @@ export function SpawnPointList({
   store,
   tick,
   client,
+  onPanTo,
 }: {
   store: SpawnStore;
   tick: number;
   client: SeqClient | null;
+  onPanTo?: (x: number, y: number) => void;
 }) {
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+
   // Default sort matches showeq-c: ascending by remaining time so the
   // next-to-pop is at the top.
   const [sorting, setSorting] = useState<SortingState>([
@@ -286,16 +290,23 @@ export function SpawnPointList({
               // Legacy rule: bold + red text when the mob is heavily
               // overdue (age > 220 ≈ 86% past cycle).
               const overdue = r.original.age > 220;
+              const isSelected = r.original.key === selectedKey;
               return (
                 <tr
                   key={r.id}
                   style={{ height: ROW_HEIGHT }}
                   className={
-                    'border-b border-border ' +
-                    (overdue
+                    'cursor-pointer border-b border-border ' +
+                    (isSelected
+                      ? 'bg-primary/20 hover:bg-primary/30'
+                      : overdue
                       ? 'font-bold text-red-600 dark:text-red-400 hover:bg-bg-alt/60'
                       : 'hover:bg-bg-alt/60')
                   }
+                  onClick={() => {
+                    setSelectedKey(r.original.key);
+                    onPanTo?.(r.original.x, r.original.y);
+                  }}
                 >
                   {r.getVisibleCells().map((c) => (
                     <td key={c.id} className="px-1.5 py-0.5 align-middle">

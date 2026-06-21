@@ -153,6 +153,7 @@ export function MapCanvas({
   trackPlayer,
   onTrackPlayerChange,
   smoothMovement,
+  panToXY,
 }: {
   store: SpawnStore;
   client: SeqClient | null;
@@ -163,6 +164,7 @@ export function MapCanvas({
   trackPlayer: boolean;
   onTrackPlayerChange: (v: boolean) => void;
   smoothMovement: boolean;
+  panToXY?: { x: number; y: number; v: number } | null;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -223,6 +225,7 @@ export function MapCanvas({
   // render loop clears it after applying. Selection itself stays in props
   // so the highlight renders every frame.
   const pendingCenterRef = useRef<number | null>(null);
+  const pendingCenterXYRef = useRef<{ x: number; y: number } | null>(null);
   const selectedIdRef = useRef<number | null>(null);
   useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
   // When a selection originates from a click *on the map*, the view is
@@ -243,6 +246,12 @@ export function MapCanvas({
     pendingCenterRef.current = selectedId;
     if (viewScaleRef.current < 3) setZoom(3);
   }, [selectedId, selectVersion]);
+
+  useEffect(() => {
+    if (panToXY == null) return;
+    pendingCenterXYRef.current = { x: panToXY.x, y: panToXY.y };
+    if (viewScaleRef.current < 3) setZoom(3);
+  }, [panToXY]);
 
   // Visible layers — state because the toggle UI needs to re-render on
   // change. The render loop reads through a ref to avoid re-creating the
@@ -658,6 +667,12 @@ export function MapCanvas({
           panYRef.current = -(tp.y - ccy) * scale;
         }
         pendingCenterRef.current = null;
+      }
+      if (pendingCenterXYRef.current != null) {
+        const { x, y } = pendingCenterXYRef.current;
+        panXRef.current = -(x - ccx) * scale;
+        panYRef.current = -(y - ccy) * scale;
+        pendingCenterXYRef.current = null;
       }
 
       // Track-player: pin pan so the player stays at the canvas center.
