@@ -1,6 +1,13 @@
 import { useState } from 'react';
 import type { ExpTick, SpawnStore } from '../state/store';
 
+function displayMobName(raw: string): string {
+  let s = raw.replace(/[0-9]/g, '').replace(/_/g, ' ').trim();
+  if (s.startsWith('a ')) return s.slice(2).trim() + ', a';
+  if (s.startsWith('an ')) return s.slice(3).trim() + ', an';
+  return s;
+}
+
 function fmtPct(x: number): string {
   return (x / 1000).toFixed(3) + '%';
 }
@@ -87,7 +94,7 @@ export function ExpLogPanel({ store, tick }: { store: SpawnStore; tick: number }
                   </td>
                   <td className="max-w-[120px] truncate px-1 py-px">
                     {e.mobName
-                      ? e.mobName.replace(/[0-9]/g, '').replace(/_/g, ' ')
+                      ? displayMobName(e.mobName)
                       : <span className="text-muted-foreground italic">(group kill)</span>}
                   </td>
                   <td className="px-1 py-px text-right">
