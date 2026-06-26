@@ -51,6 +51,7 @@ const columnHelper = createColumnHelper<Row>();
 
 function fmtRemaining(s: number | null): string {
   if (s === null) return '?';
+  if (!isFinite(s)) return 'up';
   if (s <= 0) return '  now';
   const m = Math.floor(s / 60);
   const ss = s % 60;
@@ -152,6 +153,10 @@ export function SpawnPointList({
         // Mirrors SpawnPoint::age in showeq-c: 255 * (now-death)/diff,
         // clamped, used to redden heavily-overdue rows.
         age = Math.min(255, Math.max(0, Math.floor((255 * (nowS - death)) / diff)));
+      } else if (death === 0 && diff !== 0) {
+        // Mob is alive; cycle is learned. Infinity sorts after all countdowns
+        // but before null (no-cycle-yet) in the remainingS sort.
+        remaining = Infinity;
       }
       const row: Row = {
         key: sp.key,
