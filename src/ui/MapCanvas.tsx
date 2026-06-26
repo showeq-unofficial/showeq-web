@@ -395,6 +395,13 @@ export function MapCanvas({
       for (const l of geom.locations) layers.add(l.layer);
     }
     setVisibleLayers(layers);
+
+    // Auto-apply height-filter hint from Brewall map annotations.
+    // Fall back to 10/10 (the in-game default) when no hint is present.
+    const hintAbove = geom?.heightHintAbove ?? 0;
+    const hintBelow = geom?.heightHintBelow ?? 0;
+    setHeightAbove(hintAbove > 0 ? hintAbove : 10);
+    setHeightBelow(hintBelow > 0 ? hintBelow : 10);
   }, [tick, store]);
 
   // Sync canvas backing-store size to its container, DPR-aware.
