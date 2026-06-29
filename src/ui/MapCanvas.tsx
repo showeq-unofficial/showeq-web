@@ -151,7 +151,6 @@ export function MapCanvas({
   selectVersion,
   onSelect,
   trackPlayer,
-  onTrackPlayerChange,
   smoothMovement,
   panToXY,
 }: {
@@ -162,7 +161,6 @@ export function MapCanvas({
   selectVersion: number;
   onSelect: (id: number | null) => void;
   trackPlayer: boolean;
-  onTrackPlayerChange: (v: boolean) => void;
   smoothMovement: boolean;
   panToXY?: { x: number; y: number; v: number } | null;
 }) {
@@ -296,20 +294,21 @@ export function MapCanvas({
     localStorage.setItem('map.showSpawnPoints', showSpawnPoints ? '1' : '0');
   }, [showSpawnPoints]);
   // Track-player: when on, the render loop pins pan so the player sits at
-  // the canvas center. Manual drag-pan flips it off via the parent-owned
-  // setter so the user can look elsewhere without fighting the tracker.
-  // Mirrors showeq-c's tFollowPlayer (map.h:98).
+  // the canvas center. A manual drag temporarily suspends the pin (so you
+  // can pan to look around), and releasing the drag snaps the view back to
+  // the player on the next frame — see draggingRef. The persisted toggle is
+  // never touched by panning. Mirrors showeq-c's tFollowPlayer (map.h:98).
   const trackPlayerRef = useRef(trackPlayer);
   useEffect(() => { trackPlayerRef.current = trackPlayer; }, [trackPlayer]);
+  // True only while a pan drag is actively held. While set, the track-player
+  // pin yields so the drag is visible; mouseup clears it and the next frame
+  // re-pins to the player (the snap-back).
+  const draggingRef = useRef(false);
   // When false the smoother still ingests updates (so re-enabling is
   // instant), but smoothedPos returns the raw fallback — dots and the
   // player snap directly to each daemon update.
   const smoothMovementRef = useRef(smoothMovement);
   useEffect(() => { smoothMovementRef.current = smoothMovement; }, [smoothMovement]);
-  const onTrackPlayerChangeRef = useRef(onTrackPlayerChange);
-  useEffect(() => {
-    onTrackPlayerChangeRef.current = onTrackPlayerChange;
-  }, [onTrackPlayerChange]);
   // Render-rate cap. 0 = uncapped (every rAF tick paints). Otherwise we
   // gate the actual draw on `now - lastPaint >= 1000 / cap`. rAF still
   // fires at vsync so the throttle skips paints rather than sleeping —
@@ -477,9 +476,9 @@ export function MapCanvas({
         const dy = e.clientY - downAt.clientY;
         if (!movedFar && dx * dx + dy * dy > DRAG_THRESHOLD * DRAG_THRESHOLD) {
           movedFar = true;
-          // Manual pan releases tracking so the user can look elsewhere
-          // without the next render snapping the view back.
-          if (trackPlayerRef.current) onTrackPlayerChangeRef.current(false);
+          // Suspend the track-player pin for the duration of the drag so the
+          // pan is visible. mouseup clears this and the view snaps back.
+          draggingRef.current = true;
         }
         if (movedFar) {
           panXRef.current = e.clientX - dragOrigin.x;
@@ -503,6 +502,9 @@ export function MapCanvas({
       const wasClick = dragOrigin != null && !movedFar && e.button === 0;
       dragOrigin = null;
       downAt = null;
+      // End of a pan drag: re-arm the track-player pin so the next frame
+      // snaps the view back to the player.
+      draggingRef.current = false;
       if (!wasClick) return;
       // Click: select nearest spawn within CLICK_HIT_RADIUS, or clear
       // selection on empty space (matches the showeq-c behavior of
@@ -686,8 +688,10 @@ export function MapCanvas({
       // Wins over pendingCenter — clicking a far spawn while tracking
       // bumps zoom (selection effect) but keeps the view on the player.
       // Uses the smoothed player position so the camera glides with the
-      // marker instead of snapping at each daemon update.
-      if (trackPlayerRef.current && player?.pos) {
+      // marker instead of snapping at each daemon update. Suspended while a
+      // manual pan drag is held (draggingRef) so the user can look around;
+      // releasing the drag re-pins here and snaps the view back.
+      if (trackPlayerRef.current && !draggingRef.current && player?.pos) {
         const pp = smoothedPos(player.id, player.pos);
         panXRef.current = -(pp.x - ccx) * scale;
         panYRef.current = -(pp.y - ccy) * scale;

@@ -693,7 +693,6 @@ export function App() {
             selectVersion={selectVersion}
             onSelect={onSelect}
             trackPlayer={trackPlayer}
-            onTrackPlayerChange={updateTrackPlayer}
             smoothMovement={smoothMovement}
             panToXY={panToXY}
           />
