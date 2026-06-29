@@ -84,6 +84,18 @@ export function CategorySelect({
   );
 }
 
+// Mirror legacy ShowEQ: a "black"-coded category color means "no override,
+// use the theme text color" (legacy pickTextColor swaps Qt::black for the
+// WindowText palette role). Render those swatches in currentColor — which
+// inherits the label's text color — instead of an invisible black square.
+// A missing color (e.g. the "All" option) stays transparent.
+export function swatchColor(color?: string): string {
+  if (!color) return 'transparent';
+  const c = color.trim().toLowerCase();
+  if (c === '#000000' || c === '#000' || c === 'black') return 'currentColor';
+  return color;
+}
+
 function Swatch({ color }: { color?: string }) {
   // Always render the swatch slot at the same size so labels align even
   // when a category has no color (e.g. the "All" option).
@@ -91,7 +103,7 @@ function Swatch({ color }: { color?: string }) {
     <span
       aria-hidden="true"
       className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm border border-border"
-      style={{ background: color || 'transparent' }}
+      style={{ background: swatchColor(color) }}
     />
   );
 }
