@@ -1,5 +1,6 @@
 import type { SeqClient } from '@/net/client';
 import type { SpawnStore } from '@/state/store';
+import { formatLoc } from '@/lib/coords';
 
 // Norrath month names — EQ uses 12 months. Abbreviated since the bar
 // has finite horizontal real estate.
@@ -18,17 +19,6 @@ function formatEqTime(year: number, month: number, day: number, hour: number, mi
   const hr12 = ((hour + 11) % 12) + 1;
   const mm = minute.toString().padStart(2, '0');
   return `${m} ${day}, ${year} — ${hr12}:${mm}${ampm}`;
-}
-
-function formatLoc(x: number, y: number, z: number): string {
-  // Daemon ships positions in screen convention (+X = East, +Y = South).
-  // EQ's in-game /loc command prints (Y, X, Z) in runtime convention
-  // (+Y = North, +X = West) — i.e. negated from what the daemon ships.
-  // Re-flip here so the bar matches what /loc shows in-game and the
-  // user can compare directly.
-  const yRuntime = -y;
-  const xRuntime = -x;
-  return `${yRuntime}, ${xRuntime}, ${z}`;
 }
 
 function formatXpRate(rate: { pctPerHour: number; msToLevel: number | null }): string {

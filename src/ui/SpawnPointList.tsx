@@ -11,6 +11,7 @@ import {
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { SpawnStore } from '../state/store';
 import type { SeqClient } from '../net/client';
+import { runtimeX, runtimeY } from '../lib/coords';
 
 // Mirrors showeq-c Spawn::cleanedName (spawn.cpp:834-839): strip ASCII
 // digits and turn underscores into spaces. EQ wire names look like
@@ -60,8 +61,19 @@ function fmtRemaining(s: number | null): string {
 
 function buildColumns(onRename: (key: string, currentName: string, last: string) => void) {
   return [
-    columnHelper.accessor('x', { header: 'X', size: 60 }),
-    columnHelper.accessor('y', { header: 'Y', size: 60 }),
+    // Display X/Y in EQ /loc (runtime) convention to match legacy + the
+    // status bar; row.x/row.y stay screen convention for pan-to + key
+    // identity. See lib/coords.
+    columnHelper.accessor('x', {
+      header: 'X',
+      size: 60,
+      cell: (info) => runtimeX(info.getValue()),
+    }),
+    columnHelper.accessor('y', {
+      header: 'Y',
+      size: 60,
+      cell: (info) => runtimeY(info.getValue()),
+    }),
     columnHelper.accessor('z', {
       header: 'Z',
       size: 60,

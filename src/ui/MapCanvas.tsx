@@ -5,6 +5,7 @@ import { SpawnType, type MapGeometry } from '@gen/seq/v1/events_pb';
 import { useSpawnFilterStore, passesSpawnFilter } from '../state/spawnFilterStore';
 import { classNameOf } from './classes';
 import { conHex, conOf } from './concolor';
+import { formatLoc, runtimeX, runtimeY } from '../lib/coords';
 
 // Fallback color when con-color isn't applicable: doors/drops have no
 // level, and PC/NPC fall through here only before the player level
@@ -726,13 +727,17 @@ export function MapCanvas({
         const wyMax = Math.max(worldTop, worldBottom);
         const startX = Math.ceil(wxMin / GRID_RESOLUTION) * GRID_RESOLUTION;
         const startY = Math.ceil(wyMin / GRID_RESOLUTION) * GRID_RESOLUTION;
+        // Grid line geometry stays in screen convention (project() is
+        // identity on the coords), but the printed axis labels are flipped
+        // to EQ /loc / runtime convention so they match the tooltip, the
+        // status bar, and in-game /loc — see lib/coords.
         for (let gx = startX; gx <= wxMax; gx += GRID_RESOLUTION) {
           const [sx] = project(gx, 0);
           ctx.beginPath();
           ctx.moveTo(sx, 0);
           ctx.lineTo(sx, h);
           ctx.stroke();
-          ctx.fillText(String(gx), sx + 2, h - 2);
+          ctx.fillText(String(runtimeX(gx)), sx + 2, h - 2);
         }
         for (let gy = startY; gy <= wyMax; gy += GRID_RESOLUTION) {
           const [, sy] = project(0, gy);
@@ -740,7 +745,7 @@ export function MapCanvas({
           ctx.moveTo(0, sy);
           ctx.lineTo(w, sy);
           ctx.stroke();
-          ctx.fillText(String(gy), 2, sy - 2);
+          ctx.fillText(String(runtimeY(gy)), 2, sy - 2);
         }
       }
 
@@ -1375,8 +1380,10 @@ function HoverTip({
         </div>
       )}
       <div className="tabular-nums text-muted-foreground">
-        {Math.round(spawn.pos?.x ?? 0)}, {Math.round(spawn.pos?.y ?? 0)},{' '}
-        {Math.round(spawn.pos?.z ?? 0)}
+        {/* Show coords in EQ /loc convention (Y, X, Z) so they match the
+            status bar and the in-game /loc — see lib/coords. The raw
+            pos.x/pos.y are screen convention (negated). */}
+        {formatLoc(spawn.pos?.x ?? 0, spawn.pos?.y ?? 0, spawn.pos?.z ?? 0)}
       </div>
     </div>
   );
