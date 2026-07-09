@@ -294,6 +294,21 @@ export function MapCanvas({
     showSpawnPointsRef.current = showSpawnPoints;
     localStorage.setItem('map.showSpawnPoints', showSpawnPoints ? '1' : '0');
   }, [showSpawnPoints]);
+  // Velocity lines — a short darkgray line from each moving spawn pointing
+  // in its travel direction, length proportional to speed. Ports showeq-c's
+  // m_showVelocityLines (map.cpp:3955): drawLine(sx, sy, sx-deltaX,
+  // sy-deltaY). The daemon ships vx/vy already negated into screen
+  // convention (vx = -deltaX), so the same on-screen travel offset is just
+  // (vx, vy). Drawn as raw pixels — zoom-independent, exactly like legacy.
+  // Default on, matching legacy's VelocityLines pref default (map.cpp:1718).
+  const [showVelocity, setShowVelocity] = useState<boolean>(
+    () => localStorage.getItem('map.showVelocity') !== '0',
+  );
+  const showVelocityRef = useRef(showVelocity);
+  useEffect(() => {
+    showVelocityRef.current = showVelocity;
+    localStorage.setItem('map.showVelocity', showVelocity ? '1' : '0');
+  }, [showVelocity]);
   // Track-player: when on, the render loop pins pan so the player sits at
   // the canvas center. A manual drag temporarily suspends the pin (so you
   // can pan to look around), and releasing the drag snaps the view back to
@@ -877,6 +892,21 @@ export function MapCanvas({
           ctx.arc(px, py, 8, 0, Math.PI * 2);
           ctx.stroke();
         }
+        // Velocity line — darkgray vector in the travel direction, length
+        // proportional to speed. vx/vy arrive pre-negated into screen
+        // convention (see seq.v1 Pos), so the on-screen travel offset is
+        // exactly (vx, vy) — identical to showeq-c's (-deltaX, -deltaY)
+        // screen offset (map.cpp:3955). Raw pixel length, zoom-independent,
+        // like legacy. Anchored at the smoothed dot (px,py); direction/speed
+        // read from the raw pos (velocity isn't smoothed).
+        if (showVelocityRef.current && s.pos && (s.pos.vx || s.pos.vy)) {
+          ctx.strokeStyle = '#808080';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(px, py);
+          ctx.lineTo(px + s.pos.vx, py + s.pos.vy);
+          ctx.stroke();
+        }
         // Per-type marker glyph — ports showeq-c's default MapIcons
         // table (mapicon.cpp:593-757). NPCs and live PCs carry a
         // con-colored fill; corpses/doors/drops are fixed-color outline
@@ -1224,6 +1254,15 @@ export function MapCanvas({
             className="h-3 w-3 accent-blue-500"
           />
           Spawn points
+        </label>
+        <label className="mb-2 flex cursor-pointer items-center gap-1 text-[11px] text-foreground">
+          <input
+            type="checkbox"
+            checked={showVelocity}
+            onChange={(e) => setShowVelocity(e.target.checked)}
+            className="h-3 w-3 accent-blue-500"
+          />
+          Velocity
         </label>
         <label className="mb-2 flex cursor-pointer items-center gap-1 text-[11px] text-foreground">
           <input
