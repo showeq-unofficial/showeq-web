@@ -492,13 +492,30 @@ export function MapCanvas({
       for (const l of geom.locations) layers.add(l.layer);
     }
     setVisibleLayers(layers);
+  }, [tick, store]);
 
-    // Auto-apply height-filter hint from Brewall map annotations.
-    // Fall back to 10/10 (the in-game default) when no hint is present.
+  // Pre-fill the height-filter band from the map's Brewall height hint, ONCE
+  // per zone. Gated on the zone string — NOT the geometry object — because
+  // same-zone geom churn (box switch, snapshot re-emit, map-package reselect,
+  // or the active box's map arriving in a later same-zone update) swaps the
+  // geom object repeatedly, and re-applying on every swap clobbered a value
+  // the user had since adjusted. Critically, we only touch the band when a
+  // hint is actually present: the old code forced 10/10 on every hintless
+  // swap, which wiped both the just-applied hint and the user's persisted
+  // value — the "height filter resets on load" bug. With no hint we leave the
+  // band alone (its default already comes from the persisted-localStorage
+  // useState init). The latch is set only after a hint lands, so a hint that
+  // arrives in a LATER same-zone update than the zone-change still applies.
+  const hintAppliedZoneRef = useRef<string>('');
+  useEffect(() => {
+    const zone = store.zone();
+    if (zone === hintAppliedZoneRef.current) return;
+    const geom = store.map();
     const hintAbove = geom?.heightHintAbove ?? 0;
-    const hintBelow = geom?.heightHintBelow ?? 0;
-    setHeightAbove(hintAbove > 0 ? hintAbove : 10);
-    setHeightBelow(hintBelow > 0 ? hintBelow : 10);
+    if (hintAbove <= 0) return; // no hint yet — may arrive later this zone
+    hintAppliedZoneRef.current = zone;
+    setHeightAbove(hintAbove);
+    setHeightBelow(geom?.heightHintBelow ?? 0);
   }, [tick, store]);
 
   // Sync canvas backing-store size to its container, DPR-aware.
