@@ -36,21 +36,40 @@ export function BuffsPanel({ store, tick }: { store: SpawnStore; tick: number })
   const capturedMs = Number(buffs.capturedMs);
   const elapsedSec = Math.max(0, (now - capturedMs) / 1000);
 
+  // Permanent buffs (duration_s <= 0) sort to the top. Array.sort is stable
+  // (ES2019+), so each group keeps its server order.
+  const ordered = [...visibleBuffs].sort(
+    (a, b) => Number(b.durationS <= 0) - Number(a.durationS <= 0),
+  );
+
   return (
     <div className="flex flex-col py-1 text-xs">
-      {visibleBuffs.map((b, i) => {
+      {ordered.map((b, i) => {
         const remaining = b.durationS - elapsedSec;
         // Permanent buffs come over with duration_s <= 0 in some cases;
         // distinguish from "expired but still in list" by looking at
         // the snapshot value directly.
         const permanent = b.durationS <= 0;
+        // Detrimental effects (debuffs / DoTs a mob landed on you) still
+        // render — the player wants to see them — but are marked in red and
+        // never fire fade alerts (see useBuffWarnings).
+        const debuff = !b.beneficial;
         const expiringSoon = !permanent && remaining > 0 && remaining < 30;
         return (
           <div
             key={`${b.spellId}-${i}`}
-            className="flex items-baseline gap-2 border-b border-border px-2 py-0.5 last:border-b-0"
+            className={
+              'flex items-baseline gap-2 border-b border-border px-2 py-0.5 last:border-b-0 ' +
+              (debuff ? 'border-l-2 border-l-red-500 bg-red-500/10' : '')
+            }
           >
-            <span className="flex-1 truncate text-foreground" title={b.spellName || `Spell ${b.spellId}`}>
+            <span
+              className={
+                'flex-1 truncate ' +
+                (debuff ? 'text-red-600 dark:text-red-300' : 'text-foreground')
+              }
+              title={(debuff ? 'Detrimental — ' : '') + (b.spellName || `Spell ${b.spellId}`)}
+            >
               {b.spellName || `(spell ${b.spellId})`}
             </span>
             <span
