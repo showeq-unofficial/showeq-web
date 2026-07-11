@@ -10,7 +10,7 @@ import { persist, type PersistStorage, type StorageValue } from 'zustand/middlew
 // localPrefs + FloatingWindow) — that's per-window, not per-layout.
 
 export type PanelKey =
-  | 'spawns' | 'spawnPoints' | 'stats' | 'buffs' | 'group' | 'chat' | 'combat' | 'expLog';
+  | 'spawns' | 'spawnPoints' | 'stats' | 'buffs' | 'targetEffects' | 'group' | 'chat' | 'combat' | 'expLog';
 export type DockLocation = 'left' | 'right' | 'floating';
 export type RailSide = 'left' | 'right';
 export type RailWidths = { left: number; right: number };
@@ -20,6 +20,7 @@ export const DEFAULT_VISIBILITY: Record<PanelKey, boolean> = {
   spawnPoints: true,
   stats:       true,
   buffs:       false,
+  targetEffects: false,
   group:       true,
   chat:        true,
   combat:      false,
@@ -31,6 +32,7 @@ export const DEFAULT_DOCK_LOCATION: Record<PanelKey, RailSide> = {
   spawnPoints: 'left',
   stats:       'right',
   buffs:       'right',
+  targetEffects: 'right',
   group:       'right',
   combat:      'right',
   chat:        'right',
@@ -39,7 +41,7 @@ export const DEFAULT_DOCK_LOCATION: Record<PanelKey, RailSide> = {
 
 export const DEFAULT_PANEL_ORDER: Record<RailSide, PanelKey[]> = {
   left:  ['spawns', 'spawnPoints'],
-  right: ['stats', 'buffs', 'group', 'chat', 'combat', 'expLog'],
+  right: ['stats', 'buffs', 'targetEffects', 'group', 'chat', 'combat', 'expLog'],
 };
 
 export const RAIL_MIN = 200;

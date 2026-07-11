@@ -21,6 +21,7 @@ import { SeqClient } from '../net/client';
 import { SpawnStore } from '../state/store';
 import { BoxPicker } from './BoxPicker';
 import { BuffsPanel } from './BuffsPanel';
+import { TargetEffectsPanel } from './TargetEffectsPanel';
 import { ChatLog } from './ChatLog';
 import { CombatLog } from './CombatLog';
 import { ExpLogPanel } from './ExpLogPanel';
@@ -95,6 +96,7 @@ const PANEL_DEFS: { key: PanelKey; label: string }[] = [
   { key: 'spawnPoints', label: 'Points'  },
   { key: 'stats',       label: 'Player'  },
   { key: 'buffs',       label: 'Buffs'   },
+  { key: 'targetEffects', label: 'Target' },
   { key: 'group',       label: 'Group'   },
   { key: 'chat',        label: 'Chat'    },
   { key: 'combat',      label: 'Combat'  },
@@ -108,6 +110,7 @@ const PANEL_DEFAULT_SIZES: Record<PanelKey, { w: number; h: number }> = {
   spawnPoints: { w: 380, h: 300 },
   stats:       { w: 320, h: 320 },
   buffs:       { w: 300, h: 240 },
+  targetEffects: { w: 300, h: 240 },
   group:       { w: 280, h: 200 },
   combat:      { w: 380, h: 280 },
   chat:        { w: 380, h: 320 },
@@ -120,6 +123,7 @@ const PANEL_TITLES: Record<PanelKey, string> = {
   spawnPoints: 'Spawn Points',
   stats:       'Player',
   buffs:       'Buffs',
+  targetEffects: 'Target Effects',
   group:       'Group',
   combat:      'Combat',
   chat:        'Chat',
@@ -502,6 +506,8 @@ export function App() {
         );
       case 'buffs':
         return <BuffsPanel store={store} tick={tick} />;
+      case 'targetEffects':
+        return <TargetEffectsPanel store={store} tick={tick} spawnId={selectedId} />;
       case 'group':
         return <GroupPanel store={store} tick={tick} />;
       case 'combat':
@@ -775,7 +781,7 @@ export function App() {
           onClose={() => setLootOpen(false)}
         />
       )}
-      {(['spawns','spawnPoints','stats','buffs','group','combat','chat','expLog'] as PanelKey[])
+      {(['spawns','spawnPoints','stats','buffs','targetEffects','group','combat','chat','expLog'] as PanelKey[])
         .filter((k) => visibility[k] && dockLocation[k] === 'floating')
         .map((k) => (
           <FloatingWindow

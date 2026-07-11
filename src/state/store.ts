@@ -1,5 +1,7 @@
 import type {
+  Buff,
   BuffsUpdate,
+  SpawnEffectsUpdate,
   CategoriesUpdate,
   ChatMessage,
   CombatEvent,
@@ -124,6 +126,9 @@ export class SpawnStore {
   private playerStats: PlayerStats | undefined;
   private group: GroupUpdate | undefined;
   private buffs: BuffsUpdate | undefined;
+  // Last full snapshot of the player's effects on mobs (DoTs/debuffs), keyed
+  // per-Buff by target_id. effectsFor(id) filters to one spawn.
+  private spawnEffects: SpawnEffectsUpdate | undefined;
   private categories: CategoriesUpdate | undefined;
   private filterRules: FilterRulesUpdate | undefined;
   // Allowlisted daemon-side preferences keyed by `${section}.${key}`.
@@ -218,6 +223,7 @@ export class SpawnStore {
           this.spawns.clear();
           this.spawnPoints.clear();
           this.inspects.clear();
+          this.spawnEffects = undefined;
         }
         break;
       }
@@ -329,6 +335,9 @@ export class SpawnStore {
         break;
       case 'buffs':
         this.buffs = p.value;
+        break;
+      case 'spawnEffects':
+        this.spawnEffects = p.value;
         break;
       case 'categories':
         this.categories = p.value;
@@ -467,6 +476,11 @@ export class SpawnStore {
   }
   groupState(): GroupUpdate | undefined { return this.group; }
   buffsState(): BuffsUpdate | undefined { return this.buffs; }
+  // The last effects snapshot (for its captured_ms) + the effects on one mob.
+  spawnEffectsState(): SpawnEffectsUpdate | undefined { return this.spawnEffects; }
+  effectsFor(id: number): Buff[] {
+    return this.spawnEffects?.effects.filter((e) => e.targetId === id) ?? [];
+  }
   categoriesState(): CategoriesUpdate | undefined { return this.categories; }
   filterRulesState(): FilterRulesUpdate | undefined { return this.filterRules; }
   // Returns the last EqTimeSync and the daemon's wall-clock at the
