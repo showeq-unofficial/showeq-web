@@ -19,3 +19,6 @@ tsconfig.tsbuildinfo
 
 # Tauri Rust build output
 src-tauri/target/
+
+# Claude Code local session state (cozempic hooks, worktrees)
+.claude/
