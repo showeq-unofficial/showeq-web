@@ -95,6 +95,74 @@ describe('cueKeyForFilterFlags', () => {
   });
 });
 
+describe('alertsStore — notification channels', () => {
+  it('defaults: toasts on, speech off, full volume, 1x rate', async () => {
+    const { useAlertsStore } = await loadStore();
+    const s = useAlertsStore.getState();
+    expect(s.toastsEnabled).toBe(true);
+    expect(s.speechEnabled).toBe(false);
+    expect(s.speechVolume).toBe(1);
+    expect(s.speechRate).toBe(1);
+  });
+
+  it('clamps speech volume to 0..1 and rate to 0.5..2', async () => {
+    const { useAlertsStore } = await loadStore();
+    useAlertsStore.getState().setSpeechVolume(5);
+    expect(useAlertsStore.getState().speechVolume).toBe(1);
+    useAlertsStore.getState().setSpeechVolume(-1);
+    expect(useAlertsStore.getState().speechVolume).toBe(0);
+    useAlertsStore.getState().setSpeechRate(10);
+    expect(useAlertsStore.getState().speechRate).toBe(2);
+    useAlertsStore.getState().setSpeechRate(0);
+    expect(useAlertsStore.getState().speechRate).toBe(0.5);
+  });
+
+  it('toggles enable flags independently', async () => {
+    const { useAlertsStore } = await loadStore();
+    useAlertsStore.getState().setToastsEnabled(false);
+    useAlertsStore.getState().setSpeechEnabled(true);
+    const s = useAlertsStore.getState();
+    expect(s.toastsEnabled).toBe(false);
+    expect(s.speechEnabled).toBe(true);
+  });
+
+  it('resetAlerts restores channel defaults', async () => {
+    const { useAlertsStore } = await loadStore();
+    useAlertsStore.getState().setToastsEnabled(false);
+    useAlertsStore.getState().setSpeechEnabled(true);
+    useAlertsStore.getState().setSpeechVolume(0.2);
+    useAlertsStore.getState().setSpeechRate(1.8);
+    useAlertsStore.getState().resetAlerts();
+    const s = useAlertsStore.getState();
+    expect(s.toastsEnabled).toBe(true);
+    expect(s.speechEnabled).toBe(false);
+    expect(s.speechVolume).toBe(1);
+    expect(s.speechRate).toBe(1);
+  });
+
+  it('backfills channel defaults when loading a pre-notification blob', async () => {
+    // Existing install whose persisted state predates the toast/speech
+    // fields — merge must fill them from defaults, not leave undefined.
+    localStorage.setItem('showeq.alerts', JSON.stringify({
+      state: { masterVolume: 0.3, buffWarningSecs: 60 },
+      version: 1,
+    }));
+    const { useAlertsStore } = await loadStore();
+    const s = useAlertsStore.getState();
+    // Old fields honored…
+    expect(s.masterVolume).toBeCloseTo(0.3);
+    expect(s.buffWarningSecs).toBe(60);
+    // …new channel fields backfilled from defaults.
+    expect(s.toastsEnabled).toBe(true);
+    expect(s.speechEnabled).toBe(false);
+    expect(s.speechVolume).toBe(1);
+    expect(s.speechRate).toBe(1);
+    // Nested cue maps still backfilled too.
+    expect(s.filterCues.alert.enabled).toBe(true);
+    expect(s.buffWarning.enabled).toBe(true);
+  });
+});
+
 describe('alertsStore — persistence', () => {
   it('round-trips state through localStorage', async () => {
     {

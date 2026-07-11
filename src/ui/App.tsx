@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type PointerEvent as ReactPointerEvent } from 'react';
 import { flushSync } from 'react-dom';
+import { Toaster } from 'sonner';
 import {
   Menubar,
   MenubarCheckboxItem,
@@ -49,6 +50,7 @@ import { usePrefsStore } from '../state/prefsStore';
 import { useSpawnFilterStore } from '../state/spawnFilterStore';
 import { cueKeyForFilterFlags } from '../state/alertsStore';
 import { playFilterCue } from '../lib/audioCue';
+import { toastSpawnAlert } from '../lib/toastCue';
 import { useBuffWarnings } from '../lib/useBuffWarnings';
 import { useWakeLock } from '../lib/useWakeLock';
 import { AlertsPanel } from './AlertsPanel';
@@ -410,7 +412,10 @@ export function App() {
       const p = env.payload;
       if (p.case !== 'spawnAdded' || !p.value.spawn) return;
       const cue = cueKeyForFilterFlags(p.value.spawn.filterFlags);
-      if (cue) playFilterCue(cue);
+      if (cue) {
+        playFilterCue(cue);
+        toastSpawnAlert(p.value.spawn.name, cue, p.value.spawn.id);
+      }
     });
     // Multibox: daemon broadcasts BoxListUpdated as its BoxRegistry
     // changes (Stage 4 of ../showeq-daemon/docs/MULTIBOX_PLAN.md).
@@ -510,6 +515,8 @@ export function App() {
 
   return (
     <main className="flex h-screen w-screen flex-col bg-bg-base text-foreground">
+      <Toaster theme="dark" richColors position="top-right" closeButton />
+
       <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border bg-bg-panel px-3 py-2">
         <h1 className="m-0 text-base font-semibold">ShowEQ</h1>
         <input

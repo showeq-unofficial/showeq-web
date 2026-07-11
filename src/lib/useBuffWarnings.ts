@@ -2,6 +2,8 @@ import { useEffect, useRef } from 'react';
 import type { SpawnStore } from '@/state/store';
 import { useAlertsStore } from '@/state/alertsStore';
 import { playBuffFading } from '@/lib/audioCue';
+import { toastBuffFading } from '@/lib/toastCue';
+import { speak } from '@/lib/speech';
 
 // App-level hook that watches `store.buffsState()` and fires the
 // buff-fading cue once per buff as its remaining duration crosses the
@@ -40,7 +42,12 @@ export function useBuffWarnings(store: SpawnStore): void {
         const wasAbove = !prev || prev.lastRemaining > threshold;
         const isBelow = remaining <= threshold && remaining > 0;
         if (wasAbove && isBelow && !prev?.warned) {
+          // Fire all three output channels off the same once-per-buff
+          // crossing — each self-gates on its own toggle, so dedupe and
+          // recast-reset are inherited for free.
           playBuffFading();
+          toastBuffFading(b.spellName, remaining, b.spellId);
+          speak(`${b.spellName} is fading`);
           warnedRef.current.set(b.spellId, { lastRemaining: remaining, warned: true });
         } else {
           warnedRef.current.set(b.spellId, {

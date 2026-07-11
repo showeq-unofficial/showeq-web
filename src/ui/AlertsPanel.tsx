@@ -1,4 +1,5 @@
 import { Volume2, VolumeX } from 'lucide-react';
+import { toast } from 'sonner';
 import { FILTERS } from './filterflags';
 import {
   FILTER_CUE_KEYS,
@@ -6,6 +7,7 @@ import {
   type FilterCueKey,
 } from '@/state/alertsStore';
 import { previewCue } from '@/lib/audioCue';
+import { previewSpeech } from '@/lib/speech';
 
 // Settings panel for spawn-alert and buff-fading sounds. Reads/writes
 // `useAlertsStore`. Uses `previewCue` for the test buttons so the user
@@ -41,6 +43,14 @@ export function AlertsPanel() {
   const setBuffWarningEnabled = useAlertsStore((s) => s.setBuffWarningEnabled);
   const setBuffWarningVolume = useAlertsStore((s) => s.setBuffWarningVolume);
   const setBuffWarningSecs = useAlertsStore((s) => s.setBuffWarningSecs);
+  const toastsEnabled = useAlertsStore((s) => s.toastsEnabled);
+  const speechEnabled = useAlertsStore((s) => s.speechEnabled);
+  const speechVolume = useAlertsStore((s) => s.speechVolume);
+  const speechRate = useAlertsStore((s) => s.speechRate);
+  const setToastsEnabled = useAlertsStore((s) => s.setToastsEnabled);
+  const setSpeechEnabled = useAlertsStore((s) => s.setSpeechEnabled);
+  const setSpeechVolume = useAlertsStore((s) => s.setSpeechVolume);
+  const setSpeechRate = useAlertsStore((s) => s.setSpeechRate);
   const resetAlerts = useAlertsStore((s) => s.resetAlerts);
 
   return (
@@ -190,6 +200,83 @@ export function AlertsPanel() {
         <p className="text-muted-foreground">
           Fires once per buff as it crosses the threshold downward. Re-casting
           a buff resets its warning so the next fade produces a fresh cue.
+        </p>
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+          Notifications
+        </label>
+        <div className="flex flex-col rounded border border-border bg-bg-base">
+          <div className="flex items-center gap-2 border-b border-border px-2 py-1.5">
+            <input
+              type="checkbox"
+              checked={toastsEnabled}
+              onChange={(e) => setToastsEnabled(e.target.checked)}
+              className="accent-primary"
+            />
+            <span className="w-24 text-foreground">Show toasts</span>
+            <span className="flex-1 text-[10px] text-muted-foreground">
+              On-screen pop-up for spawn &amp; buff alerts
+            </span>
+            <button
+              type="button"
+              onClick={() => toast.info('Test alert', { description: 'Toast notification' })}
+              className="rounded border border-border bg-bg-alt px-2 py-0.5 text-[10px] text-foreground hover:bg-bg-base"
+            >
+              test
+            </button>
+          </div>
+          <div className="flex items-center gap-2 border-b border-border px-2 py-1.5">
+            <input
+              type="checkbox"
+              checked={speechEnabled}
+              onChange={(e) => setSpeechEnabled(e.target.checked)}
+              className="accent-primary"
+            />
+            <span className="w-24 text-foreground">Speak buff fades</span>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              value={speechVolume}
+              disabled={!speechEnabled}
+              onChange={(e) => setSpeechVolume(Number(e.target.value))}
+              className="flex-1 accent-primary disabled:opacity-40"
+            />
+            <span className="w-10 text-right font-mono text-[11px] text-muted-foreground">
+              {Math.round(speechVolume * 100)}%
+            </span>
+            <button
+              type="button"
+              onClick={() => previewSpeech('Spirit of Wolf is fading')}
+              className="rounded border border-border bg-bg-alt px-2 py-0.5 text-[10px] text-foreground hover:bg-bg-base"
+            >
+              test
+            </button>
+          </div>
+          <div className="flex items-center gap-2 px-2 py-1.5">
+            <span className="w-24 pl-6 text-foreground">Speech rate</span>
+            <input
+              type="range"
+              min={0.5}
+              max={2}
+              step={0.1}
+              value={speechRate}
+              disabled={!speechEnabled}
+              onChange={(e) => setSpeechRate(Number(e.target.value))}
+              className="flex-1 accent-primary disabled:opacity-40"
+            />
+            <span className="w-10 text-right font-mono text-[11px] text-muted-foreground">
+              {speechRate.toFixed(1)}x
+            </span>
+          </div>
+        </div>
+        <p className="text-muted-foreground">
+          Toasts and speech are independent of the mute button — keep visual or
+          spoken alerts even with sound off. Speech uses your browser's built-in
+          voice; the buff-fade threshold above controls when it fires.
         </p>
       </section>
 

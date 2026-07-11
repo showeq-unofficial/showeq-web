@@ -42,6 +42,16 @@ interface AlertsState {
   // buff-fading cue. Only fires once per (spellId, buffSession).
   buffWarningSecs: number;
 
+  // Non-audio output channels for the same alerts. Both are gated only by
+  // their own master toggle — deliberately independent of `muted`/per-cue
+  // `enabled` so "silent visual toasts" and "speak even with sound off"
+  // both work. Toasts default on; speech (the most intrusive channel)
+  // defaults off.
+  toastsEnabled: boolean;
+  speechEnabled: boolean;
+  speechVolume: number;            // 0..1
+  speechRate: number;              // 0.5..2 (SpeechSynthesisUtterance.rate)
+
   setMuted: (v: boolean) => void;
   setMasterVolume: (v: number) => void;
   setFilterCueEnabled: (key: FilterCueKey, v: boolean) => void;
@@ -49,6 +59,10 @@ interface AlertsState {
   setBuffWarningEnabled: (v: boolean) => void;
   setBuffWarningVolume:  (v: number) => void;
   setBuffWarningSecs:    (v: number) => void;
+  setToastsEnabled: (v: boolean) => void;
+  setSpeechEnabled: (v: boolean) => void;
+  setSpeechVolume:  (v: number) => void;
+  setSpeechRate:    (v: number) => void;
   resetAlerts: () => void;
 }
 
@@ -68,7 +82,15 @@ const DEFAULT_FILTER_CUES: Record<FilterCueKey, CueState> = {
 const DEFAULT_BUFF_WARNING: CueState = { enabled: true, volume: 0.7 };
 const DEFAULT_BUFF_WARNING_SECS = 30;
 
+const DEFAULT_TOASTS_ENABLED = true;
+const DEFAULT_SPEECH_ENABLED = false;
+const DEFAULT_SPEECH_VOLUME = 1;
+const DEFAULT_SPEECH_RATE = 1;
+
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+// SpeechSynthesisUtterance.rate is spec'd for [0.1, 10]; clamp to a sane
+// [0.5, 2] so a slider mishap can't produce unintelligible speech.
+const clampRate = (v: number) => Math.max(0.5, Math.min(2, v));
 
 const jsonStorage: PersistStorage<unknown> = {
   getItem: (name) => {
@@ -93,6 +115,10 @@ export const useAlertsStore = create<AlertsState>()(
       filterCues: { ...DEFAULT_FILTER_CUES },
       buffWarning: { ...DEFAULT_BUFF_WARNING },
       buffWarningSecs: DEFAULT_BUFF_WARNING_SECS,
+      toastsEnabled: DEFAULT_TOASTS_ENABLED,
+      speechEnabled: DEFAULT_SPEECH_ENABLED,
+      speechVolume: DEFAULT_SPEECH_VOLUME,
+      speechRate: DEFAULT_SPEECH_RATE,
 
       setMuted:        (v) => set({ muted: v }),
       setMasterVolume: (v) => set({ masterVolume: clamp01(v) }),
@@ -108,12 +134,20 @@ export const useAlertsStore = create<AlertsState>()(
         const n = Math.max(5, Math.min(300, Math.round(v)));
         set({ buffWarningSecs: n });
       },
+      setToastsEnabled: (v) => set({ toastsEnabled: v }),
+      setSpeechEnabled: (v) => set({ speechEnabled: v }),
+      setSpeechVolume:  (v) => set({ speechVolume: clamp01(v) }),
+      setSpeechRate:    (v) => set({ speechRate: clampRate(v) }),
       resetAlerts: () => set({
         muted: false,
         masterVolume: 0.8,
         filterCues: { ...DEFAULT_FILTER_CUES },
         buffWarning: { ...DEFAULT_BUFF_WARNING },
         buffWarningSecs: DEFAULT_BUFF_WARNING_SECS,
+        toastsEnabled: DEFAULT_TOASTS_ENABLED,
+        speechEnabled: DEFAULT_SPEECH_ENABLED,
+        speechVolume: DEFAULT_SPEECH_VOLUME,
+        speechRate: DEFAULT_SPEECH_RATE,
       }),
     }),
     {
@@ -126,6 +160,10 @@ export const useAlertsStore = create<AlertsState>()(
         filterCues: state.filterCues,
         buffWarning: state.buffWarning,
         buffWarningSecs: state.buffWarningSecs,
+        toastsEnabled: state.toastsEnabled,
+        speechEnabled: state.speechEnabled,
+        speechVolume: state.speechVolume,
+        speechRate: state.speechRate,
       }),
       // Backfill defaults if the persisted shape is missing keys we've
       // since added (e.g. a new filter type). Without this, freshly-
