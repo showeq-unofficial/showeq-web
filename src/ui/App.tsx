@@ -199,11 +199,13 @@ export function App() {
   const deselectOnUntarget  = usePrefsStore((s) => s.deselectOnUntarget);
   const trackPlayer         = usePrefsStore((s) => s.trackPlayer);
   const smoothMovement      = usePrefsStore((s) => s.smoothMovement);
+  const predictiveMovement  = usePrefsStore((s) => s.predictiveMovement);
   const updateSelectOnCon         = usePrefsStore((s) => s.setSelectOnConsider);
   const updateSelectOnTarget      = usePrefsStore((s) => s.setSelectOnTarget);
   const updateDeselectOnUntarget  = usePrefsStore((s) => s.setDeselectOnUntarget);
   const updateTrackPlayer         = usePrefsStore((s) => s.setTrackPlayer);
   const updateSmoothMovement      = usePrefsStore((s) => s.setSmoothMovement);
+  const updatePredictiveMovement  = usePrefsStore((s) => s.setPredictiveMovement);
   // Live SeqClient for panels that need to send mutations back to the
   // daemon (e.g. FilterRulesPanel). Refreshed each time the URL changes.
   const clientRef = useRef<SeqClient | null>(null);
@@ -634,6 +636,14 @@ export function App() {
                 >
                   Smooth movement
                 </MenubarCheckboxItem>
+                <MenubarCheckboxItem
+                  checked={predictiveMovement}
+                  onCheckedChange={updatePredictiveMovement}
+                  onSelect={(e) => e.preventDefault()}
+                  disabled={!smoothMovement}
+                >
+                  Predictive (velocity)
+                </MenubarCheckboxItem>
               </MenubarContent>
             </MenubarMenu>
           </Menubar>
@@ -707,6 +717,7 @@ export function App() {
             onSelect={onSelect}
             trackPlayer={trackPlayer}
             smoothMovement={smoothMovement}
+            predictiveMovement={predictiveMovement}
             panToXY={panToXY}
           />
         </div>

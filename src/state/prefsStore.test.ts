@@ -28,6 +28,8 @@ describe('prefsStore — defaults', () => {
     expect(s.trackPlayer).toBe(false);
     // smoothMovement defaults true to match the legacy localPrefs default.
     expect(s.smoothMovement).toBe(true);
+    // predictiveMovement is an opt-in variant of smoothing — off by default.
+    expect(s.predictiveMovement).toBe(false);
   });
 });
 
@@ -68,12 +70,14 @@ describe('prefsStore — actions', () => {
     s.setDeselectOnUntarget(true);
     s.setTrackPlayer(true);
     s.setSmoothMovement(false);
+    s.setPredictiveMovement(true);
     const after = usePrefsStore.getState();
     expect(after.selectOnConsider).toBe(true);
     expect(after.selectOnTarget).toBe(true);
     expect(after.deselectOnUntarget).toBe(true);
     expect(after.trackPlayer).toBe(true);
     expect(after.smoothMovement).toBe(false);
+    expect(after.predictiveMovement).toBe(true);
   });
 
   it('persists state changes into showeq.prefs', async () => {

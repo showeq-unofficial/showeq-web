@@ -12,12 +12,18 @@ interface PrefsState {
   deselectOnUntarget: boolean;
   trackPlayer: boolean;
   smoothMovement: boolean;
+  // Variant of smoothMovement: when set (and smoothMovement is on), the map
+  // extrapolates each spawn forward along its reported velocity vector
+  // (dead reckoning) instead of easing toward the last-reported position.
+  // See PosSmoother in MapCanvas.tsx. No-op while smoothMovement is off.
+  predictiveMovement: boolean;
 
   setSelectOnConsider: (v: boolean) => void;
   setSelectOnTarget: (v: boolean) => void;
   setDeselectOnUntarget: (v: boolean) => void;
   setTrackPlayer: (v: boolean) => void;
   setSmoothMovement: (v: boolean) => void;
+  setPredictiveMovement: (v: boolean) => void;
 }
 
 function readLegacyBool(key: string, fallback: boolean): boolean {
@@ -53,12 +59,14 @@ export const usePrefsStore = create<PrefsState>()(
       deselectOnUntarget:  readLegacyBool('showeq.deselectOnUntarget', false),
       trackPlayer:         readLegacyBool('showeq.trackPlayer', false),
       smoothMovement:      readLegacyBool('showeq.smoothMovement', true),
+      predictiveMovement:  readLegacyBool('showeq.predictiveMovement', false),
 
       setSelectOnConsider:    (v) => set({ selectOnConsider: v }),
       setSelectOnTarget:      (v) => set({ selectOnTarget: v }),
       setDeselectOnUntarget:  (v) => set({ deselectOnUntarget: v }),
       setTrackPlayer:         (v) => set({ trackPlayer: v }),
       setSmoothMovement:      (v) => set({ smoothMovement: v }),
+      setPredictiveMovement:  (v) => set({ predictiveMovement: v }),
     }),
     {
       name: 'showeq.prefs',
@@ -70,6 +78,7 @@ export const usePrefsStore = create<PrefsState>()(
         deselectOnUntarget:  state.deselectOnUntarget,
         trackPlayer:         state.trackPlayer,
         smoothMovement:      state.smoothMovement,
+        predictiveMovement:  state.predictiveMovement,
       }),
     },
   ),

@@ -82,11 +82,45 @@ const LERP_TAU = 100; // ms
 // in-game teleport (typically 500+ EQ units from the prior position).
 const TELEPORT_SNAP_DIST = 150;
 
+// --- Predictive (dead-reckoning) movement -------------------------------
+// The follow smoother above eases toward the LAST-reported position, so it
+// structurally trails the true position. Predictive mode instead projects
+// each spawn forward along its reported velocity vector (vx, vy in world
+// units, same coord system as position — see seq.v1 Pos), so the dot leads
+// the stale packet and shows where the spawn actually is *now*.
+//
+// The model is a linear lerp from the current visual position toward the
+// EXTRAPOLATED point (reported + v), advanced by `elapsed / intervalMs`.
+// Anchoring the target to the reported position (plus the velocity lead)
+// makes it self-correcting: every packet re-origins from the current visual
+// position, so a bad prediction (mob stopped or turned) blends back over one
+// interval instead of snapping. `intervalMs` is a per-spawn EMA of the
+// observed packet cadence — the horizon the velocity vector is scaled to.
+const PREDICT_INTERVAL_DEFAULT = 400; // ms — seed near the observed ~358ms player cadence
+const PREDICT_INTERVAL_MIN = 100;     // clamp: ignore sub-100ms dual-fire bursts
+const PREDICT_INTERVAL_MAX = 2000;    // clamp: a long gap shouldn't inflate the horizon
+const PREDICT_INTERVAL_EMA = 0.3;     // smoothing weight for new interval samples
+// Cap how far ahead we extrapolate (in intervals) before holding, so a
+// dropped/late packet can't run the dot off along a stale vector. 1.5 lets
+// the dot lead up to half an interval past the next expected packet.
+const PREDICT_MAX_HORIZON = 1.5;
+// Scalar on the velocity lead. vx/vy ship as EQ per-update deltas whose exact
+// magnitude vs wall-clock cadence isn't calibrated (the hint line uses them
+// raw); if live tuning shows the dot over-/under-leads, adjust this one knob.
+const PREDICT_VELOCITY_GAIN = 1;
+
 type SmoothedPos = {
   prevX: number;
   prevY: number;
   targetX: number;
   targetY: number;
+  // Reported velocity at the last update, world units per update interval
+  // (screen convention, same as position). Only used in predictive mode.
+  vx: number;
+  vy: number;
+  // Per-spawn EMA of the observed packet interval (ms), the horizon the
+  // velocity lead is scaled against in predictive mode.
+  intervalMs: number;
   updateTimeMs: number;
 };
 
@@ -96,32 +130,57 @@ class PosSmoother {
   // Walk the current spawn set; stamp new ids, retarget moved ids, drop
   // disappeared ids. `players` is folded into the same map so the player
   // marker (drawn separately from the spawn loop) interpolates in lock
-  // step with everyone else.
-  sync(ids: Iterable<{ id: number; x: number; y: number }>, now: number) {
+  // step with everyone else. `predictive` selects the interpolation model
+  // for the re-origin capture; it must match the mode passed to posAt this
+  // frame so the captured visual origin is consistent with what's rendered.
+  sync(
+    ids: Iterable<{ id: number; x: number; y: number; vx: number; vy: number }>,
+    now: number,
+    predictive: boolean,
+  ) {
     const seen = new Set<number>();
-    for (const { id, x, y } of ids) {
+    for (const { id, x, y, vx, vy } of ids) {
       seen.add(id);
       const cur = this.positions.get(id);
       if (!cur) {
-        this.positions.set(id, { prevX: x, prevY: y, targetX: x, targetY: y, updateTimeMs: now });
+        this.positions.set(id, {
+          prevX: x, prevY: y, targetX: x, targetY: y,
+          vx, vy, intervalMs: PREDICT_INTERVAL_DEFAULT, updateTimeMs: now,
+        });
         continue;
       }
-      if (cur.targetX === x && cur.targetY === y) continue;
+      if (cur.targetX === x && cur.targetY === y) {
+        // Position unchanged, but velocity may have (e.g. a stop packet
+        // reports the same position with zero velocity). Refresh it so the
+        // predictor doesn't keep coasting on a stale vector.
+        cur.vx = vx; cur.vy = vy;
+        continue;
+      }
       const dx = x - cur.targetX;
       const dy = y - cur.targetY;
       if (dx * dx + dy * dy > TELEPORT_SNAP_DIST * TELEPORT_SNAP_DIST) {
         cur.prevX = x; cur.prevY = y;
         cur.targetX = x; cur.targetY = y;
+        cur.vx = vx; cur.vy = vy;
         cur.updateTimeMs = now;
         continue;
       }
-      // Capture current visual position as the new exponential origin so
-      // the transition is seamless regardless of when the update arrives.
-      const cp = this.posInternal(cur, now);
+      // Capture current visual position as the new origin so the transition
+      // is seamless regardless of when the update arrives.
+      const cp = this.posInternal(cur, now, predictive);
+      // Track packet cadence for the predictor's extrapolation horizon. Kept
+      // current in both modes so switching to predictive is warmed up.
+      const dt = now - cur.updateTimeMs;
+      if (dt > 0) {
+        const clamped = Math.min(PREDICT_INTERVAL_MAX, Math.max(PREDICT_INTERVAL_MIN, dt));
+        cur.intervalMs += (clamped - cur.intervalMs) * PREDICT_INTERVAL_EMA;
+      }
       cur.prevX = cp.x;
       cur.prevY = cp.y;
       cur.targetX = x;
       cur.targetY = y;
+      cur.vx = vx;
+      cur.vy = vy;
       cur.updateTimeMs = now;
     }
     for (const id of this.positions.keys()) {
@@ -129,13 +188,30 @@ class PosSmoother {
     }
   }
 
-  posAt(id: number, now: number): { x: number; y: number } | undefined {
+  posAt(id: number, now: number, predictive: boolean): { x: number; y: number } | undefined {
     const sp = this.positions.get(id);
-    return sp ? this.posInternal(sp, now) : undefined;
+    return sp ? this.posInternal(sp, now, predictive) : undefined;
   }
 
-  private posInternal(sp: SmoothedPos, now: number) {
+  private posInternal(sp: SmoothedPos, now: number, predictive: boolean) {
     const elapsed = now - sp.updateTimeMs;
+    if (predictive) {
+      // Linear lerp from the re-origined prev toward the extrapolated point
+      // (reported + velocity lead), advanced by elapsed/interval and clamped
+      // to the lead horizon. With prev ≈ reported this reduces to
+      // reported + v·alpha — pure dead reckoning along the velocity vector —
+      // but when prev diverges (bad prior prediction) it corrects smoothly.
+      const alpha = Math.min(
+        PREDICT_MAX_HORIZON,
+        Math.max(0, elapsed / sp.intervalMs),
+      );
+      const tx = sp.targetX + sp.vx * PREDICT_VELOCITY_GAIN;
+      const ty = sp.targetY + sp.vy * PREDICT_VELOCITY_GAIN;
+      return {
+        x: sp.prevX + (tx - sp.prevX) * alpha,
+        y: sp.prevY + (ty - sp.prevY) * alpha,
+      };
+    }
     const alpha = 1 - Math.exp(-elapsed / LERP_TAU);
     return {
       x: sp.prevX + (sp.targetX - sp.prevX) * alpha,
@@ -153,6 +229,7 @@ export function MapCanvas({
   onSelect,
   trackPlayer,
   smoothMovement,
+  predictiveMovement,
   panToXY,
 }: {
   store: SpawnStore;
@@ -163,6 +240,7 @@ export function MapCanvas({
   onSelect: (id: number | null) => void;
   trackPlayer: boolean;
   smoothMovement: boolean;
+  predictiveMovement: boolean;
   panToXY?: { x: number; y: number; v: number } | null;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -325,6 +403,10 @@ export function MapCanvas({
   // player snap directly to each daemon update.
   const smoothMovementRef = useRef(smoothMovement);
   useEffect(() => { smoothMovementRef.current = smoothMovement; }, [smoothMovement]);
+  // Predictive (velocity-extrapolating) variant of smoothMovement. Inert
+  // unless smoothMovement is also on — it only swaps the interpolation model.
+  const predictiveMovementRef = useRef(predictiveMovement);
+  useEffect(() => { predictiveMovementRef.current = predictiveMovement; }, [predictiveMovement]);
   // Render-rate cap. 0 = uncapped (every rAF tick paints). Otherwise we
   // gate the actual draw on `now - lastPaint >= 1000 / cap`. rAF still
   // fires at vsync so the throttle skips paints rather than sleeping —
@@ -642,17 +724,22 @@ export function MapCanvas({
       // but observed); skip those so we don't peg them at (0, 0).
       const smoother = smootherRef.current!;
       const animNow = performance.now();
+      // Predictive extrapolation is a variant of smoothing — only meaningful
+      // while smoothing is on. Compute the mode once so sync (re-origin) and
+      // posAt (render) agree within the frame.
+      const predictive = smoothMovementRef.current && predictiveMovementRef.current;
       smoother.sync(
         (function* () {
           for (const s of spawns) {
             if (!s.pos) continue;
-            yield { id: s.id, x: s.pos.x, y: s.pos.y };
+            yield { id: s.id, x: s.pos.x, y: s.pos.y, vx: s.pos.vx, vy: s.pos.vy };
           }
         })(),
         animNow,
+        predictive,
       );
       const smoothedPos = (id: number, fallback: { x: number; y: number }) =>
-        (smoothMovementRef.current ? smoother.posAt(id, animNow) : fallback) ?? fallback;
+        (smoothMovementRef.current ? smoother.posAt(id, animNow, predictive) : fallback) ?? fallback;
 
       // Pick viewport bounds: zone geometry → spawn-derived → fallback box.
       let minX: number, minY: number, maxX: number, maxY: number;
