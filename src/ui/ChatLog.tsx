@@ -53,9 +53,13 @@ export function ChatLog({ store, tick }: { store: SpawnStore; tick: number }) {
     >
       {log.map((m) => {
         const { label, color } = resolveChatStyle(m.channel, m.chatColor, overrides);
+        // UCS cross-zone channels carry their literal name in channelName
+        // (e.g. "General", "NewPlayers") — show it as "#name". Typed channels
+        // leave it empty and fall back to the resolved MessageType label.
+        const displayLabel = m.channelName ? `#${m.channelName}` : label;
         return (
           <div key={m.seq.toString()} className="break-words">
-            <span style={{ color }}>[{label}]</span>{' '}
+            <span style={{ color }}>[{displayLabel}]</span>{' '}
             <span className="text-foreground">{m.from}</span>
             {m.target && (
               <>
