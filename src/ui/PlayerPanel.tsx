@@ -1,5 +1,5 @@
 import type { SpawnStore } from '../state/store';
-import { classHasMana, classNameOf, classShortOf } from './classes';
+import { classDisplay, classHasMana } from './classes';
 
 function pct(cur: number, max: number): number {
   if (!max || max <= 0) return 0;
@@ -8,20 +8,6 @@ function pct(cur: number, max: number): number {
 
 function fmt(n: number): string {
   return n.toLocaleString();
-}
-
-// EQL multiclass: class_mask bit N = class id N (e.g. 224 = bits 5/6/7 =
-// SHD/DRU/MNK). class_ is only the primary, so fall back to its full name
-// when the mask is 0 (live/single-class).
-function classDisplay(classMask: number, primary: number): string {
-  if (classMask > 0) {
-    const parts: string[] = [];
-    for (let n = 1; n <= 16; n++) {
-      if (classMask & (1 << n)) parts.push(classShortOf(n));
-    }
-    if (parts.length > 0) return parts.join('/');
-  }
-  return classNameOf(primary);
 }
 
 // Split a copper total into EQ denominations (base-10: 1000c = 1p, 100c =

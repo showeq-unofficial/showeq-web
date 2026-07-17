@@ -66,6 +66,26 @@ export function classShortOf(id: number): string {
   return CLASS_SHORT[id] ?? classNameOf(id);
 }
 
+// EQL multiclass: classMask bit N = class id N (e.g. 224 = bits 5/6/7 =
+// SHD/DRU/MNK). `primary` is the single/primary class, used when the mask
+// is 0 (live/single-class). The multi-class join always uses abbreviations;
+// pass `short` to abbreviate the single-class fallback too (target HUD) vs.
+// the default full name (player panel / spawn list class column).
+export function classDisplay(
+  classMask: number,
+  primary: number,
+  opts?: { short?: boolean },
+): string {
+  if (classMask > 0) {
+    const parts: string[] = [];
+    for (let n = 1; n <= 16; n++) {
+      if (classMask & (1 << n)) parts.push(classShortOf(n));
+    }
+    if (parts.length > 0) return parts.join('/');
+  }
+  return opts?.short ? classShortOf(primary) : classNameOf(primary);
+}
+
 // Pure-melee classes with no mana pool. GM variants share the parent
 // class' resource model. Bard has mana (used for songs).
 const NO_MANA_CLASSES: ReadonlySet<number> = new Set([

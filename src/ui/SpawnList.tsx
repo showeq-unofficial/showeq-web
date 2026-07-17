@@ -13,7 +13,7 @@ import type { Spawn } from '@gen/seq/v1/events_pb';
 import type { SpawnStore } from '../state/store';
 import { useSpawnFilterStore, passesSpawnFilter } from '../state/spawnFilterStore';
 import { CategorySelect } from './CategorySelect';
-import { classNameOf } from './classes';
+import { classDisplay } from './classes';
 import { conHex, conOf } from './concolor';
 import { tintForFilterFlags } from './filterflags';
 import { equipSummary, equipSlotDisplay } from '../lib/equipModels';
@@ -33,6 +33,9 @@ type Row = {
   name: string;
   level: number;
   klass: number;
+  // EQL multiclass bitmask (bit N = class N); 0 on live/single-class. Rendered
+  // as "SHD/DRU/MNK" when set, else the single-class name from `klass`.
+  classMask: number;
   hpPct: number;
   distance: number;
   conColor: string;
@@ -96,10 +99,11 @@ const columns = [
     size: 80,
     // Full class name from showeq-daemon/src/classes.h — covers the 16
     // player classes, GM variants, and NPC service roles (Shopkeeper,
-    // Banker, etc.). Untyped NPCs (id 0) render blank.
+    // Banker, etc.). Untyped NPCs (id 0) render blank. EQL multiclass mobs
+    // show "SHD/DRU/MNK" (from classMask) instead of just the primary.
     cell: (info) => {
-      const id = info.getValue();
-      const name = classNameOf(id);
+      const { klass, classMask } = info.row.original;
+      const name = classDisplay(classMask, klass);
       return (
         <span className="block truncate" title={name}>{name}</span>
       );
@@ -301,6 +305,7 @@ export function SpawnList({
         name: display,
         level: s.level,
         klass: s.class,
+        classMask: s.classMask,
         hpPct,
         distance: Math.sqrt(d2),
         conColor: conHex(conOf(pLevel, s.level)),
@@ -332,6 +337,7 @@ export function SpawnList({
       name: baseName,
       level: lvl,
       klass: stats?.class ?? player.class,
+      classMask: stats?.classMask ?? player.classMask ?? 0,
       hpPct,
       distance: 0,
       conColor: conHex(conOf(lvl, lvl)),
@@ -752,9 +758,9 @@ export function SpawnList({
                   <td className={stickyCell}>
                     <span
                       className="block truncate"
-                      title={classNameOf(playerRow.klass)}
+                      title={classDisplay(playerRow.classMask, playerRow.klass)}
                     >
-                      {classNameOf(playerRow.klass)}
+                      {classDisplay(playerRow.classMask, playerRow.klass)}
                     </span>
                   </td>
                   <td className={stickyCell}>

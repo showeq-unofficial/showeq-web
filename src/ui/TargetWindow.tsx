@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { FloatingWindow } from './FloatingWindow';
 import { ItemIcon } from './ItemIcon';
 import type { SpawnStore } from '../state/store';
-import { classShortOf } from './classes';
+import { classDisplay } from './classes';
 import { conHex, conOf } from './concolor';
 
 function formatRemaining(secs: number): string {
@@ -47,7 +47,9 @@ export function TargetWindow({
   // reasoning as SpawnList).
   const pLevel = store.stats()?.level ?? store.player()?.level ?? 0;
   const conCol = conHex(conOf(pLevel, spawn.level));
-  const short = classShortOf(spawn.class);
+  // EQL mobs can be multiclass — show e.g. "SHD/DRU/MNK"; single-class mobs
+  // fall back to the abbreviation ("WAR"). 0/no class renders blank.
+  const classLabel = classDisplay(spawn.classMask, spawn.class, { short: true });
   const hpPct = spawn.hpMax > 0 ? Math.max(0, Math.min(100, (spawn.hpCur / spawn.hpMax) * 100)) : 0;
 
   const effects = store.effectsFor(spawn.id);
@@ -69,7 +71,7 @@ export function TargetWindow({
         </div>
         <div className="font-mono text-[11px]" style={{ color: conCol }}>
           L{spawn.level || '?'}
-          {spawn.class ? ` ${short}` : ''}
+          {classLabel ? ` ${classLabel}` : ''}
         </div>
 
         {cast && (
