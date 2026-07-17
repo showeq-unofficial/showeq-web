@@ -10,6 +10,19 @@ function fmt(n: number): string {
   return n.toLocaleString();
 }
 
+// Split a copper total into EQ denominations (base-10: 1000c = 1p, 100c =
+// 1g, 10c = 1s). Returns only the non-zero denominations so the readout
+// stays terse, e.g. 12006 -> "12p 6c". Each part keeps its denom letter
+// separate so it's easy to swap for a coin icon later.
+function moneyParts(copper: number): { key: string; amount: number; denom: string }[] {
+  return [
+    { key: 'p', amount: Math.floor(copper / 1000),      denom: 'p' },
+    { key: 'g', amount: Math.floor(copper / 100) % 10,  denom: 'g' },
+    { key: 's', amount: Math.floor(copper / 10) % 10,   denom: 's' },
+    { key: 'c', amount: copper % 10,                     denom: 'c' },
+  ].filter((d) => d.amount > 0);
+}
+
 // Single horizontal bar with current/max readout. Optional `centerInfo`
 // renders between the label and the right-side numeric (used for the XP
 // rate so it sits inline with "Exp" and "10.1%").
@@ -131,6 +144,16 @@ export function PlayerPanel({
         <div className="min-w-0">
           <div className="truncate text-sm font-semibold text-foreground">{headerLabel}</div>
           {subLabel && <div className="text-[11px] text-muted-foreground">{subLabel}</div>}
+          {s.moneyCopper > 0 && (
+            <div className="mt-0.5 flex items-center gap-1.5 font-mono text-[11px]">
+              {moneyParts(s.moneyCopper).map((d) => (
+                <span key={d.key} className="text-foreground">
+                  {/* icon slot: replace the {d.denom} letter with a coin icon later */}
+                  {d.amount}<span className="text-muted-foreground">{d.denom}</span>
+                </span>
+              ))}
+            </div>
+          )}
         </div>
         <div className="flex shrink-0 gap-1">
           {onOpenStats && <PanelButton label="Stats" onClick={onOpenStats} />}

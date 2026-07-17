@@ -25,6 +25,7 @@ import { TargetEffectsPanel } from './TargetEffectsPanel';
 import { ChatLog } from './ChatLog';
 import { CombatLog } from './CombatLog';
 import { ExpLogPanel } from './ExpLogPanel';
+import { LootHistoryPanel } from './LootHistoryPanel';
 import { FilterRulesPanel } from './FilterRulesPanel';
 import { GroupPanel } from './GroupPanel';
 import { MapCanvas } from './MapCanvas';
@@ -101,6 +102,7 @@ const PANEL_DEFS: { key: PanelKey; label: string }[] = [
   { key: 'chat',        label: 'Chat'    },
   { key: 'combat',      label: 'Combat'  },
   { key: 'expLog',      label: 'Exp Log' },
+  { key: 'lootHistory', label: 'Loot Drops' },
 ];
 // Default sizes used when a panel is first detached — chosen to match
 // each panel's typical docked footprint so the in-place detach gesture
@@ -115,6 +117,7 @@ const PANEL_DEFAULT_SIZES: Record<PanelKey, { w: number; h: number }> = {
   combat:      { w: 380, h: 280 },
   chat:        { w: 380, h: 320 },
   expLog:      { w: 380, h: 320 },
+  lootHistory: { w: 380, h: 320 },
 };
 // Title shown on detached panels — the View-menu label is too terse
 // (e.g. "Points") for a window header.
@@ -128,12 +131,13 @@ const PANEL_TITLES: Record<PanelKey, string> = {
   combat:      'Combat',
   chat:        'Chat',
   expLog:      'Exp Log',
+  lootHistory: 'Loot History',
 };
 // Panels that prefer to fill remaining vertical space when docked, so
 // the rail's natural-height panels (Player/Buffs/Group) sit at the top
 // and these expand. Used for both rails when a panel of either type
 // gets docked there.
-const FLEX_GROW_PANELS = new Set<PanelKey>(['spawns', 'spawnPoints', 'combat', 'chat', 'expLog']);
+const FLEX_GROW_PANELS = new Set<PanelKey>(['spawns', 'spawnPoints', 'combat', 'chat', 'expLog', 'lootHistory']);
 const SNAP_THRESHOLD_PX = 32;
 
 
@@ -518,6 +522,8 @@ export function App() {
         return <ExpLogPanel store={store} tick={tick} />;
       case 'chat':
         return <ChatLog store={store} tick={tick} />;
+      case 'lootHistory':
+        return <LootHistoryPanel store={store} tick={tick} />;
     }
   };
 
@@ -792,7 +798,7 @@ export function App() {
           onClose={() => setLootOpen(false)}
         />
       )}
-      {(['spawns','spawnPoints','stats','buffs','targetEffects','group','combat','chat','expLog'] as PanelKey[])
+      {(['spawns','spawnPoints','stats','buffs','targetEffects','group','combat','chat','expLog','lootHistory'] as PanelKey[])
         .filter((k) => visibility[k] && dockLocation[k] === 'floating')
         .map((k) => (
           <FloatingWindow

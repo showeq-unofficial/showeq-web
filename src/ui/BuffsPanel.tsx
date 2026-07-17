@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { SpawnStore } from '../state/store';
+import { ItemIcon } from './ItemIcon';
 
 function formatRemaining(secs: number): string {
   if (!Number.isFinite(secs) || secs <= 0) return '—';
@@ -63,6 +64,7 @@ export function BuffsPanel({ store, tick }: { store: SpawnStore; tick: number })
               (debuff ? 'border-l-2 border-l-red-500 bg-red-500/10' : '')
             }
           >
+            <ItemIcon icon={b.icon} atlas="spells" base={0} size={20} />
             <span
               className={
                 'flex-1 truncate ' +

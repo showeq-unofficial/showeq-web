@@ -12,6 +12,7 @@ import type {
   InspectAnswer,
   Item,
   ItemCacheTotals,
+  LootDrops,
   MapGeometry,
   MapPackage,
   PlayerStats,
@@ -30,6 +31,11 @@ export type ChatEntry = ChatMessage & { seq: bigint };
 // time so the UI can show "12s ago" style relative timestamps if it
 // wants to (currently unused).
 export type CombatEntry = CombatEvent & { seq: bigint; localTs: number };
+
+// One corpse loot-drop event (eql OP_LootDrops), carried on the wire as a
+// LootDrops payload. Stamped with the daemon seq for a stable render key.
+// Distinct from LootEntry below, which is synthesized from loot chat lines.
+export type LootDropEntry = LootDrops & { seq: bigint };
 
 // One skill-up: synthesized client-side by diffing each PlayerStats.skills
 // payload against the previous one. Session-only — not persisted.
@@ -85,6 +91,7 @@ const CHAT_HISTORY_LIMIT = 500;
 const COMBAT_HISTORY_LIMIT = 500;
 const SKILL_LOG_LIMIT = 200;
 const LOOT_LOG_LIMIT = 1000;
+const LOOT_DROPS_LIMIT = 500;
 const EXP_LOG_LIMIT = 1000;
 // CC_User_Loot from showeq-daemon-quarm/src/everquest.h. Loot lines from
 // the server arrive as OP_FormattedMessage with this colour.
@@ -172,6 +179,7 @@ export class SpawnStore {
   private combat: CombatEntry[] = [];
   private skillLog: SkillLogEntry[] = [];
   private lootLog: LootEntry[] = [];
+  private lootDrops: LootDropEntry[] = [];
   private moneyTotals: MoneyTotals = { platinum: 0, gold: 0, silver: 0, copper: 0 };
   private expSamples: ExpSample[] = [];
   private expLog: ExpTick[] = [];
@@ -322,6 +330,13 @@ export class SpawnStore {
         }
         break;
       }
+      case 'lootDrops': {
+        this.lootDrops.push({ ...p.value, seq: env.seq });
+        if (this.lootDrops.length > LOOT_DROPS_LIMIT) {
+          this.lootDrops.splice(0, this.lootDrops.length - LOOT_DROPS_LIMIT);
+        }
+        break;
+      }
       case 'chat': {
         this.chat.push({ ...p.value, seq: env.seq });
         if (this.chat.length > CHAT_HISTORY_LIMIT) {
@@ -421,6 +436,7 @@ export class SpawnStore {
   combatLog(): ReadonlyArray<CombatEntry> { return this.combat; }
   skillLogEntries(): ReadonlyArray<SkillLogEntry> { return this.skillLog; }
   lootEntries(): ReadonlyArray<LootEntry> { return this.lootLog; }
+  lootDropEntries(): ReadonlyArray<LootDropEntry> { return this.lootDrops; }
   moneyTotal(): MoneyTotals { return { ...this.moneyTotals }; }
   clearLootLog(): void {
     this.lootLog = [];

@@ -66,6 +66,34 @@ older or stripped-down Windows installs, grab the **Evergreen Bootstrapper**
 from <https://developer.microsoft.com/microsoft-edge/webview2/> first — without
 it the app launches to a blank window.
 
+## Dev scripts
+
+### Item icons (`scripts/gen-item-icons.py`)
+
+The Loot History panel (and future buff/spell/AA panels) render real EQ item
+icons via `src/ui/ItemIcon.tsx`, which reads sprite atlases from
+`public/icons/`. Those PNGs are transcoded from the **local EQ/EQL client
+install** and are **gitignored** — a fresh checkout must generate them once:
+
+```
+python3 scripts/gen-item-icons.py [SRC_DIR] [OUT_DIR]
+#   SRC_DIR default: ~/src/showeq/EverQuest/uifiles/default   (varies per machine)
+#   OUT_DIR default: public/icons
+```
+
+Needs Pillow (`pip install pillow`). The client ships `dragitem*.dds`
+(DXT5-compressed), which Pillow reads natively — no texconv/ImageMagick. Each
+`dragitemN.dds` is a 256×256 atlas of a 6×6 grid of 40×40 icons. An icon id
+maps to a sprite by:
+
+```
+file = (icon - 500) // 36 + 1      # dragitem{file}.png
+cell = (icon - 500) %  36
+col  = cell % 6 ;  row = cell // 6 # sprite at (col*40, row*40)
+```
+
+The client path varies per machine — pass `SRC_DIR` if yours differs.
+
 ## Layout
 
 ```
