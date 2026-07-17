@@ -75,6 +75,13 @@ const SKILL_NAMES: Record<number, string> = {
   72: 'Berserking',
   73: 'Taunt',
   74: 'Frenzy',
+  75: 'Triple Attack', // standard modern-EQ addition after Frenzy
+  76: '2H Piercing',   // standard modern-EQ addition
+  // eql skill ids 77-82 are real skills (77/79/80/82 observed nonzero in a
+  // profile dump, scaling with level; 75/78/81 read 0 for the sampled multiclass
+  // char) but lack an authoritative enum->name mapping (eqstr_us.txt keys skill
+  // names by string id, not skill index). They fall through to the `Skill N`
+  // placeholder below until named.
 };
 
 export function skillNameOf(id: number): string {

@@ -32,7 +32,10 @@ export function SkillsWindow({
       ...s,
       cap: skillCap(s.skillId, classId, level, primarySpecId),
     }))
-    .filter((s) => s.cap !== undefined)
+    // Keep skills the class can train (known cap) OR any skill the player
+    // actually has a value in — e.g. EQL skills 75-82, which have no cap
+    // table yet; a trained skill is real even if its cap is unknown.
+    .filter((s) => s.cap !== undefined || s.value > 0)
     .sort((a, b) => skillNameOf(a.skillId).localeCompare(skillNameOf(b.skillId)));
   // Newest first, capped at 5 visible. The store retains more history
   // for diffing — this is just the displayed slice.
@@ -54,13 +57,13 @@ export function SkillsWindow({
             <table className="w-full text-xs">
               <tbody>
                 {rows.map((s) => {
-                  const cap = s.cap!;
-                  const atCap = cap > 0 && s.value >= cap;
+                  const cap = s.cap;
+                  const atCap = cap != null && cap > 0 && s.value >= cap;
                   return (
                     <tr key={s.skillId} className="border-b border-border/40 last:border-0">
                       <td className="py-0.5 text-foreground">{skillNameOf(s.skillId)}</td>
                       <td className={`py-0.5 text-right font-mono ${atCap ? 'text-amber-500' : 'text-foreground'}`}>
-                        {s.value}/{cap}
+                        {s.value}{cap != null ? `/${cap}` : ''}
                       </td>
                     </tr>
                   );
