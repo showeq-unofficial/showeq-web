@@ -17,19 +17,23 @@ export function LootHistoryPanel({ store, tick }: { store: SpawnStore; tick: num
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-y-auto px-2 py-1 text-[11px]">
+    <div className="@container flex h-full min-h-0 flex-col overflow-y-auto px-2 py-1 text-[11px]">
       {Array.from({ length: entries.length }, (_, i) => entries[entries.length - 1 - i]).map((e) => (
         <div key={e.seq.toString()} className="border-t border-border/30 py-1 first:border-t-0">
           <div className="font-semibold text-foreground">{e.corpseName || '(corpse)'}</div>
           {e.items.length === 0 ? (
             <div className="pl-6 text-muted-foreground italic">(no items)</div>
           ) : (
-            e.items.map((it, j) => (
-              <div key={j} className="flex items-center gap-1.5 pl-1">
-                <ItemIcon icon={it.icon} size={24} />
-                <span className="text-foreground">{it.name}</span>
-              </div>
-            ))
+            // Two items per row once the panel is wide enough, one column
+            // when narrow (container query against the scroll root).
+            <div className="grid grid-cols-1 gap-x-3 gap-y-0.5 pl-1 @[16rem]:grid-cols-2">
+              {e.items.map((it, j) => (
+                <div key={j} className="flex min-w-0 items-center gap-1.5">
+                  <ItemIcon icon={it.icon} size={24} />
+                  <span className="truncate text-foreground">{it.name}</span>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       ))}

@@ -38,9 +38,12 @@ function satColor(v: number): string {
   return 'text-red-600 dark:text-red-400';
 }
 
-// Single horizontal bar with current/max readout. Optional `centerInfo`
-// renders between the label and the right-side numeric (used for the XP
-// rate so it sits inline with "Exp" and "10.1%").
+// Thin EQ-style bar: colored fill with the readout drawn OVER it — label +
+// cur/max at the left, percent at the right edge. White text with a dark
+// outline shadow so it stays legible over both the fill and the empty
+// track in either theme. When `numericRight` is given (Exp/AA) the raw
+// cur/max is meaningless, so we hide the left number and let `centerInfo`
+// (XP rate) fill the middle; `numericRight` becomes the right-edge value.
 function Bar({
   label,
   cur,
@@ -57,25 +60,24 @@ function Bar({
   centerInfo?: string;
 }) {
   const p = pct(cur, max);
-  const right = numericRight ?? (max > 0 ? `${fmt(cur)} / ${fmt(max)}` : '—');
+  const showCurMax = numericRight === undefined;
+  const right = numericRight ?? (max > 0 ? `${Math.round(p)}%` : '—');
   return (
-    <div className="px-2 py-1">
-      <div className="flex items-baseline gap-2 text-[10px] uppercase tracking-wide text-muted-foreground">
-        <span>{label}</span>
-        {centerInfo && (
-          <span className="flex-1 truncate text-center font-mono normal-case tracking-normal">
-            {centerInfo}
-          </span>
+    <div className="relative mx-2 h-[15px] overflow-hidden rounded-sm bg-bg-base">
+      <div
+        className={`absolute inset-y-0 left-0 transition-[width] duration-200 ease-out ${color}`}
+        style={{ width: `${p}%` }}
+      />
+      <div
+        className="absolute inset-0 flex items-center gap-1.5 px-1.5 font-mono text-[10px] leading-none text-white"
+        style={{ textShadow: '0 0 2px rgba(0,0,0,0.9), 0 1px 1px rgba(0,0,0,0.9)' }}
+      >
+        <span className="shrink-0 font-sans uppercase tracking-wide opacity-90">{label}</span>
+        {showCurMax && (
+          <span className="tabular-nums">{max > 0 ? `${fmt(cur)} / ${fmt(max)}` : '—'}</span>
         )}
-        <span className={`font-mono normal-case tracking-normal text-foreground${centerInfo ? '' : ' ml-auto'}`}>
-          {right}
-        </span>
-      </div>
-      <div className="mt-0.5 h-2 overflow-hidden rounded bg-bg-base">
-        <div
-          className={`h-full transition-[width] duration-200 ease-out ${color}`}
-          style={{ width: `${p}%` }}
-        />
+        {centerInfo && <span className="min-w-0 flex-1 truncate text-center">{centerInfo}</span>}
+        <span className="ml-auto shrink-0 tabular-nums">{right}</span>
       </div>
     </div>
   );
@@ -180,11 +182,13 @@ export function PlayerPanel({
         </div>
       )}
 
-      <Bar label="HP"   cur={s.hpCur}      max={s.hpMax}      color="bg-red-600" />
-      {classHasMana(s.class) && (
-        <Bar label="Mana" cur={s.manaCur} max={s.manaMax} color="bg-blue-600" />
-      )}
-      <Bar label="End"  cur={s.enduranceCur} max={s.enduranceMax} color="bg-yellow-500" />
+      <div className="flex flex-col gap-0.5">
+        <Bar label="HP"   cur={s.hpCur}      max={s.hpMax}      color="bg-red-600" />
+        {classHasMana(s.class) && (
+          <Bar label="Mana" cur={s.manaCur} max={s.manaMax} color="bg-blue-600" />
+        )}
+        <Bar label="End"  cur={s.enduranceCur} max={s.enduranceMax} color="bg-amber-500" />
+      </div>
 
       {/* Hunger/thirst (eql OP_Stamina). Live/test never send it (0/0), so gate
           on >0 rather than target-branching. Compact readout, not a full bar. */}
@@ -207,25 +211,27 @@ export function PlayerPanel({
 
       <div className="mx-2 my-1 border-t border-border" />
 
-      <Bar
-        label="Exp"
-        cur={s.expCur}
-        max={s.expMax}
-        color="bg-amber-500"
-        numericRight={s.expMax > 0 ? `${pct(s.expCur, s.expMax).toFixed(1)}%` : '—'}
-        centerInfo={
-          rate
-            ? `${rate.pctPerHour.toFixed(2)}% / hr · ${rate.msToLevel === null ? '—' : fmtDuration(rate.msToLevel)}`
-            : undefined
-        }
-      />
-      <Bar
-        label={aaLabel(s.aaPoints, s.aaUnspent)}
-        cur={s.aaExpCur}
-        max={s.aaExpMax}
-        color="bg-purple-500"
-        numericRight={s.aaExpMax > 0 ? `${pct(s.aaExpCur, s.aaExpMax).toFixed(1)}%` : '—'}
-      />
+      <div className="flex flex-col gap-0.5">
+        <Bar
+          label="Exp"
+          cur={s.expCur}
+          max={s.expMax}
+          color="bg-yellow-400"
+          numericRight={s.expMax > 0 ? `${pct(s.expCur, s.expMax).toFixed(1)}%` : '—'}
+          centerInfo={
+            rate
+              ? `${rate.pctPerHour.toFixed(2)}% / hr · ${rate.msToLevel === null ? '—' : fmtDuration(rate.msToLevel)}`
+              : undefined
+          }
+        />
+        <Bar
+          label={aaLabel(s.aaPoints, s.aaUnspent)}
+          cur={s.aaExpCur}
+          max={s.aaExpMax}
+          color="bg-green-500"
+          numericRight={s.aaExpMax > 0 ? `${pct(s.aaExpCur, s.aaExpMax).toFixed(1)}%` : '—'}
+        />
+      </div>
     </div>
   );
 }
