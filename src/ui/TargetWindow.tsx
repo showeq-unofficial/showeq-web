@@ -17,16 +17,20 @@ function formatRemaining(secs: number): string {
 // EQ-style target HUD for the App-level selectedId: con-colored name/level/
 // class, an HP bar, and the mob's active buff icons. Mana is omitted — mobs
 // don't report it on the wire.
+//
+// Renders nothing when there is no current target — spawnId null, or the
+// spawn gone from the store (spawnRemoved/spawnKilled both delete it, so a
+// despawned/dead target hides the window automatically). Overall visibility
+// is owned by the View-menu "Target Window" toggle in App; there is
+// deliberately no close button.
 export function TargetWindow({
   store,
   tick,
   spawnId,
-  onClose,
 }: {
   store: SpawnStore;
   tick: number;
   spawnId: number | null;
-  onClose: () => void;
 }) {
   void tick;
   // Local 1Hz clock so buff timers count down between server updates.
@@ -37,71 +41,85 @@ export function TargetWindow({
   }, []);
 
   const spawn = spawnId == null ? undefined : store.byId(spawnId);
+  if (!spawn) return null;
+
+  // Prefer PlayerStats.level so con doesn't drift after a ding (same
+  // reasoning as SpawnList).
+  const pLevel = store.stats()?.level ?? store.player()?.level ?? 0;
+  const conCol = conHex(conOf(pLevel, spawn.level));
+  const short = classShortOf(spawn.class);
+  const hpPct = spawn.hpMax > 0 ? Math.max(0, Math.min(100, (spawn.hpCur / spawn.hpMax) * 100)) : 0;
+
+  const effects = store.effectsFor(spawn.id);
+  const snap = store.spawnEffectsState();
+  const capturedMs = snap ? Number(snap.capturedMs) : now;
+  const elapsedSec = Math.max(0, (now - capturedMs) / 1000);
+
+  // Transient cast-in-progress line for the current target. castFor prunes
+  // itself once the cast time elapses, so this drops out on its own.
+  const cast = store.castFor(spawn.id, now);
+  const castRemaining =
+    cast && Math.max(0, (cast.startedAt + cast.castTimeMs - now) / 1000);
 
   return (
-    <FloatingWindow id="target" title="Target" defaultSize={{ w: 240, h: 200 }} onClose={onClose}>
-      {!spawn ? (
-        <div className="px-2 py-2 text-xs text-muted-foreground">No target.</div>
-      ) : (
-        (() => {
-          // Prefer PlayerStats.level so con doesn't drift after a ding (same
-          // reasoning as SpawnList).
-          const pLevel = store.stats()?.level ?? store.player()?.level ?? 0;
-          const conCol = conHex(conOf(pLevel, spawn.level));
-          const short = classShortOf(spawn.class);
-          const hpPct = spawn.hpMax > 0 ? Math.max(0, Math.min(100, (spawn.hpCur / spawn.hpMax) * 100)) : 0;
+    <FloatingWindow id="target" title="Target" defaultSize={{ w: 240, h: 200 }}>
+      <div className="flex flex-col gap-1.5 p-2 text-xs">
+        <div className="truncate text-sm font-semibold text-foreground">
+          {spawn.name || `Spawn ${spawn.id}`}
+        </div>
+        <div className="font-mono text-[11px]" style={{ color: conCol }}>
+          L{spawn.level || '?'}
+          {spawn.class ? ` ${short}` : ''}
+        </div>
 
-          const effects = store.effectsFor(spawn.id);
-          const snap = store.spawnEffectsState();
-          const capturedMs = snap ? Number(snap.capturedMs) : now;
-          const elapsedSec = Math.max(0, (now - capturedMs) / 1000);
+        {cast && (
+          <div
+            className="flex items-baseline gap-1 text-[11px] text-violet-600 dark:text-violet-300"
+            title={cast.spellName || `Spell ${cast.spellId}`}
+          >
+            <span className="shrink-0">⟳ casting:</span>
+            <span className="flex-1 truncate">
+              {cast.spellName || `Spell ${cast.spellId}`}
+            </span>
+            <span className="shrink-0 font-mono tabular-nums">
+              ({(castRemaining || 0).toFixed(1)}s)
+            </span>
+          </div>
+        )}
 
-          return (
-            <div className="flex flex-col gap-1.5 p-2 text-xs">
-              <div className="truncate text-sm font-semibold text-foreground">
-                {spawn.name || `Spawn ${spawn.id}`}
-              </div>
-              <div className="font-mono text-[11px]" style={{ color: conCol }}>
-                L{spawn.level || '?'}
-                {spawn.class ? ` ${short}` : ''}
-              </div>
+        <div>
+          <div className="flex items-baseline justify-between text-[10px] uppercase tracking-wide text-muted-foreground">
+            <span>HP</span>
+            <span className="font-mono normal-case tracking-normal text-foreground">
+              {spawn.hpMax > 0 ? `${Math.round(hpPct)}%` : '—'}
+            </span>
+          </div>
+          <div className="mt-0.5 h-2 overflow-hidden rounded bg-bg-base">
+            <div
+              className="h-full bg-red-600 transition-[width] duration-200 ease-out"
+              style={{ width: `${hpPct}%` }}
+            />
+          </div>
+        </div>
 
-              <div>
-                <div className="flex items-baseline justify-between text-[10px] uppercase tracking-wide text-muted-foreground">
-                  <span>HP</span>
-                  <span className="font-mono normal-case tracking-normal text-foreground">
-                    {spawn.hpMax > 0 ? `${Math.round(hpPct)}%` : '—'}
-                  </span>
-                </div>
-                <div className="mt-0.5 h-2 overflow-hidden rounded bg-bg-base">
-                  <div
-                    className="h-full bg-red-600 transition-[width] duration-200 ease-out"
-                    style={{ width: `${hpPct}%` }}
-                  />
-                </div>
-              </div>
-
-              {effects.length === 0 ? (
-                <div className="text-[11px] text-muted-foreground">No buffs.</div>
-              ) : (
-                <div className="flex flex-wrap gap-1">
-                  {effects.map((b, i) => {
-                    const permanent = b.durationS <= 0;
-                    const remaining = b.durationS - elapsedSec;
-                    const label = permanent ? '∞' : formatRemaining(remaining);
-                    const name = b.spellName || `Spell ${b.spellId}`;
-                    return (
-                      <span key={`${b.spellId}-${i}`} title={`${name} — ${label}`}>
-                        <ItemIcon icon={b.icon} atlas="spells" base={0} size={22} />
-                      </span>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          );
-        })()
-      )}
+        {effects.length === 0 ? (
+          <div className="text-[11px] text-muted-foreground">No buffs.</div>
+        ) : (
+          <div className="flex flex-wrap gap-1">
+            {effects.map((b, i) => {
+              const permanent = b.durationS <= 0;
+              const remaining = b.durationS - elapsedSec;
+              const label = permanent ? '∞' : formatRemaining(remaining);
+              const name = b.spellName || `Spell ${b.spellId}`;
+              return (
+                <span key={`${b.spellId}-${i}`} title={`${name} — ${label}`}>
+                  <ItemIcon icon={b.icon} atlas="spells" base={0} size={22} />
+                </span>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </FloatingWindow>
   );
 }

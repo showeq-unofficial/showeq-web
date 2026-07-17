@@ -798,7 +798,6 @@ export function App() {
           store={store}
           tick={tick}
           spawnId={selectedId}
-          onClose={() => setTargetWindowOpen(false)}
         />
       )}
       {inventoryOpen && (

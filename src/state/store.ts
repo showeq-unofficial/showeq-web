@@ -55,6 +55,16 @@ export type ExpTick = {
   localTs: number;
 };
 
+// One in-progress spell cast for a spawn, from a SpawnCast event. Transient:
+// auto-expires castTimeMs after startedAt (local receipt time). castFor()
+// prunes it lazily on read once elapsed.
+export type CastEntry = {
+  spellId: number;
+  spellName: string;
+  castTimeMs: number;
+  startedAt: number;
+};
+
 // One loot line synthesized from a chatColor === 286 (CC_User_Loot)
 // chat event. `looter` is the empty string for "You have looted a X"
 // (template 467) and the looter's name for group/raid lines like
@@ -187,6 +197,9 @@ export class SpawnStore {
   // OP_InspectAnswer results keyed by spawn ID. Overlays real item names
   // on the visual model codes from the spawn packet. Cleared on zone change.
   private inspects = new Map<number, InspectAnswer>();
+  // In-progress spell casts keyed by caster spawn id. Transient — pruned on
+  // expiry (lazily in castFor), spawnRemoved/spawnKilled, and zoneChanged.
+  private casts = new Map<number, CastEntry>();
 
   apply(env: Envelope): void {
     this.lastSeq = env.seq;
@@ -197,6 +210,7 @@ export class SpawnStore {
         this.spawnPoints.clear();
         this.items.clear();
         this.wornSlots.clear();
+        this.casts.clear();
         this.zoneShort = p.value.zoneShort;
         this.zoneLong = p.value.zoneLong;
         this.playerId = p.value.playerId;
@@ -232,6 +246,7 @@ export class SpawnStore {
           this.spawnPoints.clear();
           this.inspects.clear();
           this.spawnEffects = undefined;
+          this.casts.clear();
         }
         break;
       }
@@ -265,6 +280,7 @@ export class SpawnStore {
           ? p.value.id
           : p.value.deceasedId;
         this.spawns.delete(id);
+        this.casts.delete(id);
         break;
       }
       case 'spawnUpdated': {
@@ -354,6 +370,22 @@ export class SpawnStore {
       case 'spawnEffects':
         this.spawnEffects = p.value;
         break;
+      case 'spawnCast': {
+        const c = p.value;
+        // castTimeMs === 0 means instant/aborted — nothing to count down, so
+        // drop any prior in-progress cast for this spawn rather than pin one.
+        if (c.castTimeMs <= 0) {
+          this.casts.delete(c.casterId);
+        } else {
+          this.casts.set(c.casterId, {
+            spellId: c.spellId,
+            spellName: c.spellName,
+            castTimeMs: c.castTimeMs,
+            startedAt: Date.now(),
+          });
+        }
+        break;
+      }
       case 'categories':
         this.categories = p.value;
         break;
@@ -496,6 +528,18 @@ export class SpawnStore {
   spawnEffectsState(): SpawnEffectsUpdate | undefined { return this.spawnEffects; }
   effectsFor(id: number): Buff[] {
     return this.spawnEffects?.effects.filter((e) => e.targetId === id) ?? [];
+  }
+  // The in-progress cast for a spawn, if one is still counting down. Prunes
+  // lazily: once castTimeMs has elapsed since startedAt the entry is dropped
+  // and undefined returned, so a finished cast never lingers past its bar.
+  castFor(id: number, now = Date.now()): CastEntry | undefined {
+    const c = this.casts.get(id);
+    if (!c) return undefined;
+    if (now - c.startedAt >= c.castTimeMs) {
+      this.casts.delete(id);
+      return undefined;
+    }
+    return c;
   }
   categoriesState(): CategoriesUpdate | undefined { return this.categories; }
   filterRulesState(): FilterRulesUpdate | undefined { return this.filterRules; }
