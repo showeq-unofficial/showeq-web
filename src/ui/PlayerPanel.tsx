@@ -1,5 +1,5 @@
 import type { SpawnStore } from '../state/store';
-import { classHasMana, classNameOf } from './classes';
+import { classHasMana, classNameOf, classShortOf } from './classes';
 
 function pct(cur: number, max: number): number {
   if (!max || max <= 0) return 0;
@@ -8,6 +8,20 @@ function pct(cur: number, max: number): number {
 
 function fmt(n: number): string {
   return n.toLocaleString();
+}
+
+// EQL multiclass: class_mask bit N = class id N (e.g. 224 = bits 5/6/7 =
+// SHD/DRU/MNK). class_ is only the primary, so fall back to its full name
+// when the mask is 0 (live/single-class).
+function classDisplay(classMask: number, primary: number): string {
+  if (classMask > 0) {
+    const parts: string[] = [];
+    for (let n = 1; n <= 16; n++) {
+      if (classMask & (1 << n)) parts.push(classShortOf(n));
+    }
+    if (parts.length > 0) return parts.join('/');
+  }
+  return classNameOf(primary);
 }
 
 // Split a copper total into EQ denominations (base-10: 1000c = 1p, 100c =
@@ -70,7 +84,16 @@ function Bar({
       />
       <div
         className="absolute inset-0 flex items-center gap-1.5 px-1.5 font-mono text-[10px] leading-none text-white"
-        style={{ textShadow: '0 0 2px rgba(0,0,0,0.9), 0 1px 1px rgba(0,0,0,0.9)' }}
+        style={{
+          // 8-way 1px dark shadow = a solid outline (crisper than a soft
+          // blur), plus a thin stroke painted UNDER the fill so the white
+          // stays legible over light fills (End/Exp/AA) and the empty track,
+          // in both themes.
+          textShadow:
+            '1px 0 0 rgba(0,0,0,0.9),-1px 0 0 rgba(0,0,0,0.9),0 1px 0 rgba(0,0,0,0.9),0 -1px 0 rgba(0,0,0,0.9),1px 1px 0 rgba(0,0,0,0.9),-1px -1px 0 rgba(0,0,0,0.9),1px -1px 0 rgba(0,0,0,0.9),-1px 1px 0 rgba(0,0,0,0.9)',
+          WebkitTextStroke: '0.5px rgba(0,0,0,0.55)',
+          paintOrder: 'stroke fill',
+        }}
       >
         <span className="shrink-0 font-sans uppercase tracking-wide opacity-90">{label}</span>
         {showCurMax && (
@@ -149,7 +172,7 @@ export function PlayerPanel({
     );
   }
 
-  const className = classNameOf(s.class);
+  const className = classDisplay(s.classMask, s.class);
   const headerLabel = s.name ? `${s.name}` : '(unknown)';
 
   return (
