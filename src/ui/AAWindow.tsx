@@ -1,10 +1,10 @@
 import { FloatingWindow } from './FloatingWindow';
 import type { SpawnStore } from '../state/store';
 
-// AA-id → human label mapping is OP_SendAATable territory (not in proto today),
-// so v1 just shows the numeric ability_id. Sorted by id ascending — no
-// stable name-order yet. Once OP_SendAATable record contents are surfaced,
-// swap the id for the title_sid lookup.
+// AAEntry.name is resolved daemon-side (OP_SendAATable descID->titleSID +
+// dbstr_us.txt type-1); it's empty until that wire decode lands, so fall
+// back to the numeric ability_id. Named rows sort alphabetically (matching
+// legacy AAMgr::ownedRows); unnamed rows sort by id after them.
 export function AAWindow({
   store,
   tick,
@@ -16,9 +16,12 @@ export function AAWindow({
 }) {
   void tick;
   const stats = store.stats();
-  const rows = [...(stats?.purchasedAa ?? [])].sort(
-    (a, b) => a.abilityId - b.abilityId,
-  );
+  const rows = [...(stats?.purchasedAa ?? [])].sort((a, b) => {
+    if (a.name && b.name) return a.name.localeCompare(b.name);
+    if (a.name) return -1;
+    if (b.name) return 1;
+    return a.abilityId - b.abilityId;
+  });
   const totalRanks = rows.reduce((sum, r) => sum + r.rank, 0);
 
   return (
@@ -41,8 +44,12 @@ export function AAWindow({
                     key={r.abilityId}
                     className="border-b border-border/40 last:border-0"
                   >
-                    <td className="py-0.5 font-mono text-foreground">
-                      #{r.abilityId}
+                    <td className="py-0.5 text-foreground">
+                      {r.name ? (
+                        r.name
+                      ) : (
+                        <span className="font-mono">#{r.abilityId}</span>
+                      )}
                     </td>
                     <td className="py-0.5 text-right font-mono text-amber-500">
                       {r.rank}
