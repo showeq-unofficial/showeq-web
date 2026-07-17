@@ -11,7 +11,10 @@ zero-padded), so file names and requests always agree:
   * Item icons:  dragitem1.dds -> dragitem001.png  (atlas "dragitem", base 500)
   * Spell icons: Spells21.tga  -> spells021.png     (atlas "spells",   base 0)
 Icon id -> file/cell:  file = (icon-base)//36 + 1 ;  cell = (icon-base)%36 ;
-  col = cell%6 ; row = cell//6 ; sprite at (col*40, row*40).
+  sprite at (col*40, row*40). Cell->col/row order differs by atlas (see
+  src/ui/ItemIcon.tsx): dragitem is column-major (col = cell//6 ; row = cell%6),
+  spells is row-major (col = cell%6 ; row = cell//6). Slicing here is the same
+  6x6 grid either way, so the PNGs are unaffected by that convention.
 
 The client atlases are DXT5-compressed DDS (items) / uncompressed TGA (spells),
 both of which Pillow reads natively (Image.open -> convert("RGBA")) -- no

@@ -4,7 +4,13 @@
 // (base 500); spell icons use the `spells` atlas (base 0). `base` shifts the id
 // origin.
 //
-//   file = (icon-base)//36 + 1 ; cell = (icon-base)%36 ; col = cell%6 ; row = cell//6
+//   file = (icon-base)//36 + 1 ; cell = (icon-base)%36
+//
+// Cell -> col/row order DIFFERS by atlas (verified against known loot/buff art):
+// dragitem is numbered COLUMN-major (icon increments down a column then across),
+// spells is ROW-major. col==row cells look identical either way, which is why the
+// bug read as a partial/systematic offset.
+//   dragitem: col = cell//6 ; row = cell%6      spells: col = cell%6 ; row = cell//6
 //
 // The PNGs are gitignored (can't ship EQ client art), so on a checkout that
 // hasn't run gen-item-icons.py they're absent. We probe each atlas once and
@@ -59,8 +65,10 @@ export function ItemIcon({
     return <span className="inline-block shrink-0" style={{ width: size, height: size }} aria-hidden />;
   }
   const cell = idx % 36;
-  const col = cell % 6;
-  const row = Math.floor(cell / 6);
+  // dragitem atlases are numbered column-major, spells row-major (see note above).
+  const colMajor = atlas === 'dragitem';
+  const col = colMajor ? Math.floor(cell / 6) : cell % 6;
+  const row = colMajor ? cell % 6 : Math.floor(cell / 6);
   const scale = size / CELL;
   return (
     <span
