@@ -149,27 +149,13 @@ export function PlayerPanel({
 
   const className = classNameOf(s.class);
   const headerLabel = s.name ? `${s.name}` : '(unknown)';
-  const subLabel = s.level
-    ? `Level ${s.level}${className ? ' ' + className : ''}`
-    : className;
 
   return (
     <div className="flex flex-col gap-1 py-1">
-      <div className="flex items-start justify-between gap-2 px-2 pb-1 pt-0.5">
-        <div className="min-w-0">
-          <div className="truncate text-sm font-semibold text-foreground">{headerLabel}</div>
-          {subLabel && <div className="text-[11px] text-muted-foreground">{subLabel}</div>}
-          {s.moneyCopper > 0 && (
-            <div className="mt-0.5 flex items-center gap-1.5 font-mono text-[11px]">
-              {moneyParts(s.moneyCopper).map((d) => (
-                <span key={d.key} className="text-foreground">
-                  {/* icon slot: replace the {d.denom} letter with a coin icon later */}
-                  {d.amount}<span className="text-muted-foreground">{d.denom}</span>
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
+      {/* Name + action buttons on one row; the level/class + money rows below
+          get the full panel width so they don't fight the buttons for space. */}
+      <div className="flex items-start justify-between gap-2 px-2 pt-0.5">
+        <div className="min-w-0 truncate text-sm font-semibold text-foreground">{headerLabel}</div>
         <div className="flex shrink-0 gap-1">
           {onOpenStats && <PanelButton label="Stats" onClick={onOpenStats} />}
           {onOpenSkills && <PanelButton label="Skills" onClick={onOpenSkills} />}
@@ -178,6 +164,21 @@ export function PlayerPanel({
           {onOpenItems && <PanelButton label="Items" onClick={onOpenItems} />}
         </div>
       </div>
+      {(s.level || className) && (
+        <div className="flex items-center justify-between gap-2 whitespace-nowrap px-2 text-[11px] text-muted-foreground">
+          <span>{s.level ? `Level ${s.level}` : ''}</span>
+          {className && <span className="truncate">{className}</span>}
+        </div>
+      )}
+      {s.moneyCopper > 0 && (
+        <div className="flex items-center gap-1.5 px-2 font-mono text-[11px]">
+          {moneyParts(s.moneyCopper).map((d) => (
+            <span key={d.key} className="text-foreground">
+              {d.amount}<span className="text-muted-foreground">{d.denom}</span>
+            </span>
+          ))}
+        </div>
+      )}
 
       <Bar label="HP"   cur={s.hpCur}      max={s.hpMax}      color="bg-red-600" />
       {classHasMana(s.class) && (
