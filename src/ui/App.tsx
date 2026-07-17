@@ -41,6 +41,7 @@ import { LootWindow } from './LootWindow';
 import { AAWindow } from './AAWindow';
 import { SkillsWindow } from './SkillsWindow';
 import { StatsWindow } from './StatsWindow';
+import { TargetWindow } from './TargetWindow';
 import { StatusBar } from './StatusBar';
 import { InventoryStatsPanel } from './InventoryStatsPanel';
 import { VerticalResizeHandle } from './VerticalResizeHandle';
@@ -196,6 +197,7 @@ export function App() {
   const [skillsOpen, setSkillsOpen] = useState(false);
   const [aaWindowOpen, setAAWindowOpen] = useState(false);
   const [statsWindowOpen, setStatsWindowOpen] = useState(false);
+  const [targetWindowOpen, setTargetWindowOpen] = useState(false);
   const [inventoryOpen, setInventoryOpen] = useState(false);
   const [lootOpen, setLootOpen] = useState(false);
   const selectOnCon         = usePrefsStore((s) => s.selectOnConsider);
@@ -581,6 +583,13 @@ export function App() {
                     {p.label}
                   </MenubarCheckboxItem>
                 ))}
+                <MenubarCheckboxItem
+                  checked={targetWindowOpen}
+                  onCheckedChange={() => setTargetWindowOpen((v) => !v)}
+                  onSelect={(e) => e.preventDefault()}
+                >
+                  Target Window
+                </MenubarCheckboxItem>
                 <MenubarSeparator />
                 <MenubarCheckboxItem
                   checked={statusBarVisible}
@@ -782,6 +791,14 @@ export function App() {
           store={store}
           tick={tick}
           onClose={() => setStatsWindowOpen(false)}
+        />
+      )}
+      {targetWindowOpen && (
+        <TargetWindow
+          store={store}
+          tick={tick}
+          spawnId={selectedId}
+          onClose={() => setTargetWindowOpen(false)}
         />
       )}
       {inventoryOpen && (
