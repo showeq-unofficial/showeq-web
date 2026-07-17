@@ -23,6 +23,21 @@ function moneyParts(copper: number): { key: string; amount: number; denom: strin
   ].filter((d) => d.amount > 0);
 }
 
+// OP_Stamina food/water are uint32 "ticks till next eat/drink" — they count
+// down from a full meal (~6000) to 0 = hungry/thirsty, so % of the full value
+// reads as a "how full" gauge. Same struct on live + eql. Classic EQ tops out
+// near 6000; if a full eat/drink doesn't read ~100% live, bump this.
+const STAMINA_MAX = 6000;
+
+// Food/water saturation -> warning color: green while comfortable, amber
+// getting low, red about to go hungry/thirsty.
+function satColor(v: number): string {
+  const p = pct(v, STAMINA_MAX);
+  if (p > 50) return 'text-emerald-600 dark:text-emerald-300';
+  if (p > 20) return 'text-amber-600 dark:text-amber-300';
+  return 'text-red-600 dark:text-red-400';
+}
+
 // Single horizontal bar with current/max readout. Optional `centerInfo`
 // renders between the label and the right-side numeric (used for the XP
 // rate so it sits inline with "Exp" and "10.1%").
@@ -169,6 +184,25 @@ export function PlayerPanel({
         <Bar label="Mana" cur={s.manaCur} max={s.manaMax} color="bg-blue-600" />
       )}
       <Bar label="End"  cur={s.enduranceCur} max={s.enduranceMax} color="bg-yellow-500" />
+
+      {/* Hunger/thirst (eql OP_Stamina). Live/test never send it (0/0), so gate
+          on >0 rather than target-branching. Compact readout, not a full bar. */}
+      {(s.food > 0 || s.water > 0) && (
+        <div className="flex items-center gap-4 px-2 text-[10px] uppercase tracking-wide text-muted-foreground">
+          <span className="flex items-center gap-1">
+            <span aria-hidden>🍗</span>Food
+            <span className={'font-mono normal-case tracking-normal ' + satColor(s.food)}>
+              {Math.round(pct(s.food, STAMINA_MAX))}%
+            </span>
+          </span>
+          <span className="flex items-center gap-1">
+            <span aria-hidden>💧</span>Water
+            <span className={'font-mono normal-case tracking-normal ' + satColor(s.water)}>
+              {Math.round(pct(s.water, STAMINA_MAX))}%
+            </span>
+          </span>
+        </div>
+      )}
 
       <div className="mx-2 my-1 border-t border-border" />
 

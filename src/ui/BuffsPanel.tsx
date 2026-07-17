@@ -60,7 +60,7 @@ export function BuffsPanel({ store, tick }: { store: SpawnStore; tick: number })
           <div
             key={`${b.spellId}-${i}`}
             className={
-              'flex items-baseline gap-2 border-b border-border px-2 py-0.5 last:border-b-0 ' +
+              'flex items-center gap-2 border-b border-border px-2 py-0.5 last:border-b-0 ' +
               (debuff ? 'border-l-2 border-l-red-500 bg-red-500/10' : '')
             }
           >
