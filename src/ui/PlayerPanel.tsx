@@ -191,6 +191,26 @@ export function PlayerPanel({
         </div>
       )}
 
+      {/* EQL active stance + invocation (empty on live/single-class, so the
+          line and each half hide when unset). Compact readout, not a bar. */}
+      {(s.stance || s.invocation) && (
+        <div className="flex items-center gap-x-1.5 px-2 text-[11px] text-muted-foreground">
+          {s.stance && (
+            <span>
+              <span className="uppercase tracking-wide opacity-80">Stance</span>{' '}
+              <span className="text-foreground">{s.stance}</span>
+            </span>
+          )}
+          {s.stance && s.invocation && <span className="opacity-50">·</span>}
+          {s.invocation && (
+            <span>
+              <span className="uppercase tracking-wide opacity-80">Invocation</span>{' '}
+              <span className="text-foreground">{s.invocation}</span>
+            </span>
+          )}
+        </div>
+      )}
+
       <div className="flex flex-col gap-0.5">
         <Bar label="HP"   cur={s.hpCur}      max={s.hpMax}      color="bg-red-600" />
         {classHasMana(s.class) && (
