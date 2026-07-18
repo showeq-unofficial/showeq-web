@@ -242,7 +242,16 @@ export class SpawnStore {
         this.zoneLong = p.value.zoneLong;
         this.geometry = p.value.geometry;
         if (zoneChanged) {
+          // Keep the player's own spawn across the wipe. A zone-in Snapshot
+          // can arrive with the NEW player_id but a STALE zone_short (it fires
+          // on self-id adoption, before OP_NewZone resolves the name), so this
+          // ZONE_CHANGED would otherwise clear the self spawn the snapshot just
+          // established — leaving the map with no player marker / camera until
+          // the new zone happens to re-send it. Preserve 'you' so player()
+          // never blinks out; the new zone's updates refresh its position.
+          const self = this.playerId ? this.spawns.get(this.playerId) : undefined;
           this.spawns.clear();
+          if (self) this.spawns.set(self.id, self);
           this.spawnPoints.clear();
           this.inspects.clear();
           this.spawnEffects = undefined;

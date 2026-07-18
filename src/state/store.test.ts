@@ -7,6 +7,7 @@ import {
   SpawnAddedSchema,
   SpawnCastSchema,
   SpawnKilledSchema,
+  SnapshotSchema,
   SpawnRemovedSchema,
   SpawnSchema,
   ZoneChangedSchema,
@@ -31,6 +32,25 @@ function zoneChangedEnvelope(seq: bigint, zoneShort: string, zoneLong = '') {
     payload: {
       case: 'zoneChanged',
       value: create(ZoneChangedSchema, { zoneShort, zoneLong }),
+    },
+  });
+}
+
+function snapshotEnvelope(
+  seq: bigint,
+  zoneShort: string,
+  playerId: number,
+  spawns: { id: number; name: string }[],
+) {
+  return create(EnvelopeSchema, {
+    seq,
+    payload: {
+      case: 'snapshot',
+      value: create(SnapshotSchema, {
+        zoneShort,
+        playerId,
+        spawns: spawns.map((s) => create(SpawnSchema, { id: s.id, name: s.name })),
+      }),
     },
   });
 }
@@ -235,5 +255,26 @@ describe('SpawnStore zoneChanged', () => {
     store.apply(zoneChangedEnvelope(4n, 'qeynos'));
     expect(store.zone()).toBe('qeynos');
     expect(store.all()).toHaveLength(2);
+  });
+
+  it('keeps the player spawn across a zone-in clear (stale-zone snapshot)', () => {
+    const store = new SpawnStore();
+    // A zone-in Snapshot carries the NEW player_id but a STALE zone_short (it
+    // fires on self-id adoption, before OP_NewZone resolves the new name).
+    store.apply(snapshotEnvelope(1n, 'soldungb', 13167, [
+      { id: 13167, name: 'Skik' },
+      { id: 200, name: 'a bat' },
+    ]));
+    expect(store.player()?.id).toBe(13167);
+    expect(store.all()).toHaveLength(2);
+
+    // The real new-zone name lands right after → a real zone change. The
+    // player's own spawn must survive so the map's self-marker + camera don't
+    // blink out until the new zone re-sends it (mirrors legacy's persistent
+    // m_player). Neighbours from the old zone are still cleared.
+    store.apply(zoneChangedEnvelope(2n, 'lavastorm'));
+    expect(store.zone()).toBe('lavastorm');
+    expect(store.player()?.id).toBe(13167); // 'you' preserved
+    expect(store.all()).toHaveLength(1); // only self, neighbours cleared
   });
 });
