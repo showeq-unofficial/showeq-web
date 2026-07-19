@@ -117,6 +117,15 @@ const LOOT_RX_OTHER = /^--(.+?) has looted a (.+?)--$/;
 // independently after a coarse boundary match.
 const MONEY_RX = /^You receive\s+(.+?)\s+(?:from the corpse|as your split)\.?$/;
 const MONEY_TOKEN_RX = /([\d,]+)\s+(platinum|gold|silver|copper)/g;
+// Some servers auto-sell looted items and report the item and its proceeds in
+// one line, with no separate coin message — so this is the only record of
+// either. Matched in addition to the templates above, not instead of them.
+const SELL_RX =
+  /^You looted (?:an?\s+|\d+\s+)?(.+?) from .+? corpse and sold it for (.+?)\.$/;
+// Same servers border the plain (unsold) loot line like the templates above but
+// name the corpse inside the border and allow a quantity prefix.
+const LOOT_RX_YOU_ALT =
+  /^--You have looted (?:an?\s+|\d+\s+)?(.+?) from .+? corpse\.--$/;
 // Window over which the XP rate is averaged. Long enough to stay stable
 // during travel/idle gaps between kills, short enough to reflect a
 // changed group/zone within a few minutes.
@@ -367,7 +376,7 @@ export class SpawnStore {
         if (this.chat.length > CHAT_HISTORY_LIMIT) {
           this.chat.splice(0, this.chat.length - CHAT_HISTORY_LIMIT);
         }
-        this.parseLootChat(p.value.text, p.value.chatColor);
+        this.parseLootChat(p.value.text, p.value.chatColor, p.value.coinCopper);
         break;
       }
       case 'group':
@@ -486,7 +495,10 @@ export class SpawnStore {
   expLogEntries(): ReadonlyArray<ExpTick> { return this.expLog; }
   clearExpLog(): void { this.expLog = []; }
 
-  private parseLootChat(text: string, chatColor: number): void {
+  private parseLootChat(text: string, chatColor: number, coinCopper = 0): void {
+    // Sale proceeds come pre-parsed on the envelope, so the amount never has to
+    // be recovered from server-specific wording here.
+    if (coinCopper > 0) this.accrueMoneyCopper(coinCopper);
     if (chatColor === CHAT_COLOR_LOOT) {
       const youMatch = LOOT_RX_YOU.exec(text);
       if (youMatch) {
@@ -496,6 +508,17 @@ export class SpawnStore {
       const otherMatch = LOOT_RX_OTHER.exec(text);
       if (otherMatch) {
         this.pushLoot({ itemName: otherMatch[2], looter: otherMatch[1], localTs: Date.now() });
+        return;
+      }
+      const sellMatch = SELL_RX.exec(text);
+      if (sellMatch) {
+        // Item name only — the coin rode in on coin_copper above.
+        this.pushLoot({ itemName: sellMatch[1], looter: '', localTs: Date.now() });
+        return;
+      }
+      const youAltMatch = LOOT_RX_YOU_ALT.exec(text);
+      if (youAltMatch) {
+        this.pushLoot({ itemName: youAltMatch[1], looter: '', localTs: Date.now() });
         return;
       }
     }
@@ -513,6 +536,17 @@ export class SpawnStore {
     if (this.lootLog.length > LOOT_LOG_LIMIT) {
       this.lootLog.splice(0, this.lootLog.length - LOOT_LOG_LIMIT);
     }
+  }
+
+  // Accrue a pre-parsed copper amount. Denominations are split out rather than
+  // kept as one total so the readout matches the text path above, which likewise
+  // sums each denomination without carrying (7c + 7c reads "14c").
+  private accrueMoneyCopper(copper: number): void {
+    if (!Number.isFinite(copper) || copper <= 0) return;
+    this.moneyTotals.platinum += Math.floor(copper / 1000);
+    this.moneyTotals.gold += Math.floor(copper / 100) % 10;
+    this.moneyTotals.silver += Math.floor(copper / 10) % 10;
+    this.moneyTotals.copper += copper % 10;
   }
 
   private accrueMoney(coinPhrase: string): void {
