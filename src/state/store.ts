@@ -117,11 +117,11 @@ const LOOT_RX_OTHER = /^--(.+?) has looted a (.+?)--$/;
 // independently after a coarse boundary match.
 const MONEY_RX = /^You receive\s+(.+?)\s+(?:from the corpse|as your split)\.?$/;
 const MONEY_TOKEN_RX = /([\d,]+)\s+(platinum|gold|silver|copper)/g;
-// Some servers auto-sell looted items and report the item and its proceeds in
-// one line, with no separate coin message — so this is the only record of
-// either. Matched in addition to the templates above, not instead of them.
+// Some servers auto-sell looted items and report it in one line. Only the ITEM
+// name is taken from here — the coin rides LootTransaction.coin_copper, which
+// the daemon reads from the wire rather than from this wording.
 const SELL_RX =
-  /^You looted (?:an?\s+|\d+\s+)?(.+?) from .+? corpse and sold it for (.+?)\.$/;
+  /^You looted (?:an?\s+|\d+\s+)?(.+?) from .+? corpse and sold it for .+\.$/;
 // Same servers border the plain (unsold) loot line like the templates above but
 // name the corpse inside the border and allow a quantity prefix.
 const LOOT_RX_YOU_ALT =
@@ -376,7 +376,13 @@ export class SpawnStore {
         if (this.chat.length > CHAT_HISTORY_LIMIT) {
           this.chat.splice(0, this.chat.length - CHAT_HISTORY_LIMIT);
         }
-        this.parseLootChat(p.value.text, p.value.chatColor, p.value.coinCopper);
+        this.parseLootChat(p.value.text, p.value.chatColor);
+        break;
+      }
+      case 'lootTransaction': {
+        // Sale proceeds arrive as a binary field on the loot confirmation, so
+        // the amount never has to be recovered from message wording.
+        if (p.value.coinCopper > 0) this.accrueMoneyCopper(p.value.coinCopper);
         break;
       }
       case 'group':
@@ -495,10 +501,7 @@ export class SpawnStore {
   expLogEntries(): ReadonlyArray<ExpTick> { return this.expLog; }
   clearExpLog(): void { this.expLog = []; }
 
-  private parseLootChat(text: string, chatColor: number, coinCopper = 0): void {
-    // Sale proceeds come pre-parsed on the envelope, so the amount never has to
-    // be recovered from server-specific wording here.
-    if (coinCopper > 0) this.accrueMoneyCopper(coinCopper);
+  private parseLootChat(text: string, chatColor: number): void {
     if (chatColor === CHAT_COLOR_LOOT) {
       const youMatch = LOOT_RX_YOU.exec(text);
       if (youMatch) {
@@ -512,7 +515,7 @@ export class SpawnStore {
       }
       const sellMatch = SELL_RX.exec(text);
       if (sellMatch) {
-        // Item name only — the coin rode in on coin_copper above.
+        // Item name only; the coin arrives separately as a LootTransaction.
         this.pushLoot({ itemName: sellMatch[1], looter: '', localTs: Date.now() });
         return;
       }
