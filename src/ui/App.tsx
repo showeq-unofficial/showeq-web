@@ -30,6 +30,8 @@ import { FilterRulesPanel } from './FilterRulesPanel';
 import { GroupPanel } from './GroupPanel';
 import { MapCanvas } from './MapCanvas';
 import { LootBrowser } from './LootBrowser';
+import { isTauri } from '@/lib/lootApi';
+import { startTauriLootRecorder } from '@/state/lootRecorder';
 import { Panel } from './Panel';
 import { PreferencesPanel } from './PreferencesPanel';
 import { RailDivider, CollapsedRail } from './RailDivider';
@@ -450,6 +452,16 @@ export function App() {
         p.value.activeBoxId,
       );
     });
+    // Tauri desktop: record loot in-app off this same envelope stream (the
+    // packaged app has no standalone Bun recorder). No-ops in the browser build.
+    let stopLoot: (() => void) | undefined;
+    let lootCancelled = false;
+    if (isTauri()) {
+      startTauriLootRecorder((fn) => client.onEnvelope(fn))
+        .then((s) => { if (lootCancelled) s(); else stopLoot = s; })
+        .catch((e) => console.error('in-app loot recorder failed to start', e));
+    }
+
     const ws = { detach: () => { client.close(); detachEnv(); detachSelect(); detachAlert(); detachBoxes(); } };
 
     const poll = setInterval(() => {
@@ -472,6 +484,8 @@ export function App() {
     return () => {
       clearInterval(poll);
       ws.detach();
+      lootCancelled = true;
+      stopLoot?.();
       if (clientRef.current === client) clientRef.current = null;
     };
   }, [store, url]);
