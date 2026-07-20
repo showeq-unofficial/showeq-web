@@ -454,13 +454,8 @@ export function App() {
     });
     // Tauri desktop: record loot in-app off this same envelope stream (the
     // packaged app has no standalone Bun recorder). No-ops in the browser build.
-    let stopLoot: (() => void) | undefined;
-    let lootCancelled = false;
-    if (isTauri()) {
-      startTauriLootRecorder((fn) => client.onEnvelope(fn))
-        .then((s) => { if (lootCancelled) s(); else stopLoot = s; })
-        .catch((e) => console.error('in-app loot recorder failed to start', e));
-    }
+    // The sink DB is chosen per backend from the first Snapshot's data namespace.
+    const stopLoot = isTauri() ? startTauriLootRecorder((fn) => client.onEnvelope(fn)) : undefined;
 
     const ws = { detach: () => { client.close(); detachEnv(); detachSelect(); detachAlert(); detachBoxes(); } };
 
@@ -484,7 +479,6 @@ export function App() {
     return () => {
       clearInterval(poll);
       ws.detach();
-      lootCancelled = true;
       stopLoot?.();
       if (clientRef.current === client) clientRef.current = null;
     };

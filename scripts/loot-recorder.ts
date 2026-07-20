@@ -1,21 +1,23 @@
 // Standalone Bun host for the loot recorder (browser users; the Tauri build
 // records in-app via src/state/lootRecorder.ts instead). Subscribes to the
-// daemon's protobuf WebSocket, feeds envelopes through the shared recorder core
-// (src/recorder/core.ts), and persists to a bun:sqlite DB.
+// daemon's protobuf WebSocket, feeds envelopes through the shared recorder core,
+// and persists to a bun:sqlite DB. The DB is chosen per backend from the
+// daemon's data namespace in the first Snapshot (~/.showeq/loot.db for Live,
+// ~/.showeq/eql/loot.db for EQL) unless --db overrides it.
 //
-//   bun scripts/loot-recorder.ts [ws://host:port] [--db PATH] [--looter NAME]
-//                                [--serve-port N | --no-serve]
+//   bun scripts/loot-recorder.ts [ws://host:port] [--db PATH]
+//                                [--serve-port N | --no-serve] [--looter NAME]
 //
-// Defaults: ws://localhost:9090, ~/.showeq/loot.db, HTTP query API on :9092
-// (for the web loot view). Ctrl-C to stop.
+// Defaults: ws://localhost:9090, per-namespace DB, HTTP query API on :9092.
 import { create, fromBinary, toBinary } from '@bufbuild/protobuf';
-import { EnvelopeSchema } from '../src/gen/seq/v1/events_pb';
+import { EnvelopeSchema, type Envelope } from '../src/gen/seq/v1/events_pb';
 import { ClientEnvelopeSchema, SubscribeSchema, Topic } from '../src/gen/seq/v1/client_pb';
-import { LootRecorderCore } from '../src/recorder/core';
+import { attachRecorder } from '../src/recorder/attach';
 import { BunSqliteSink } from './bun-sink';
 import { startLootServer } from './loot-server';
+import { mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 function arg(flag: string): string | undefined {
   const i = process.argv.indexOf(flag);
@@ -23,17 +25,31 @@ function arg(flag: string): string | undefined {
 }
 
 const url = process.argv[2]?.startsWith('ws') ? process.argv[2] : 'ws://localhost:9090';
-const dbPath = arg('--db') ?? join(homedir(), '.showeq', 'loot.db');
+const explicitDb = arg('--db');
 const looter = arg('--looter') ?? '';
 const servePort = process.argv.includes('--no-serve') ? 0 : Number(arg('--serve-port')) || 9092;
 
-const sink = new BunSqliteSink(dbPath);
-const core = new LootRecorderCore(sink, looter);
-console.log(`loot-recorder → ${url}   db=${dbPath}`);
-if (servePort) {
-  startLootServer(dbPath, servePort);
-  console.log(`loot API      → http://localhost:${servePort}/api/loot`);
+console.log(`loot-recorder → ${url}`);
+
+// Open the per-namespace DB (or the --db override) once the first Snapshot
+// reveals the daemon's backend, and start the read API on that same DB.
+let apiStarted = false;
+function openSink(namespace: string): BunSqliteSink {
+  const dbPath = explicitDb ?? join(homedir(), namespace, 'loot.db');
+  mkdirSync(dirname(dbPath), { recursive: true });
+  const sink = new BunSqliteSink(dbPath);
+  console.log(`recording → ${dbPath}`);
+  if (servePort && !apiStarted) {
+    startLootServer(dbPath, servePort);
+    apiStarted = true;
+    console.log(`loot API   → http://localhost:${servePort}/api/loot`);
+  }
+  return sink;
 }
+
+// The WS reconnects internally; keep a single envelope listener across reconnects.
+let listener: ((env: Envelope) => void) | null = null;
+const stop = attachRecorder((fn) => { listener = fn; return () => { listener = null; }; }, openSink, undefined, looter);
 
 let backoff = 250;
 let stopping = false;
@@ -41,7 +57,6 @@ let stopping = false;
 function connect(): void {
   const ws = new WebSocket(url);
   ws.binaryType = 'arraybuffer';
-
   ws.onopen = () => {
     backoff = 250;
     const env = create(ClientEnvelopeSchema, {
@@ -53,16 +68,14 @@ function connect(): void {
     ws.send(toBinary(ClientEnvelopeSchema, env));
     console.log('connected, subscribed');
   };
-
   ws.onmessage = (ev) => {
     if (!(ev.data instanceof ArrayBuffer)) return;
     try {
-      core.applyEnvelope(fromBinary(EnvelopeSchema, new Uint8Array(ev.data)));
+      listener?.(fromBinary(EnvelopeSchema, new Uint8Array(ev.data)));
     } catch (e) {
       console.warn('decode error', e);
     }
   };
-
   ws.onerror = () => ws.close();
   ws.onclose = () => {
     if (stopping) return;
@@ -74,9 +87,8 @@ function connect(): void {
 function shutdown(): void {
   if (stopping) return;
   stopping = true;
-  core.flush();
-  console.log(`\nrecorded ${core.count()} loot rows → ${dbPath}`);
-  sink.close();
+  stop();   // flush the recorder + close the sink
+  console.log('\nstopped');
   process.exit(0);
 }
 process.on('SIGINT', shutdown);

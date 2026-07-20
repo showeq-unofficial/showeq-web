@@ -34,17 +34,28 @@ export async function fetchLoot(base: string, limit = 5000): Promise<LootRecord[
   return (await res.json()) as LootRecord[];
 }
 
-// Desktop build reads loot.db directly via tauri-plugin-sql (no HTTP host).
-let tauriDb: Promise<Database> | null = null;
+// The daemon's data namespace (from Snapshot.data_namespace), set by the Tauri
+// in-app recorder so the desktop loot view reads the SAME per-backend DB the
+// recorder writes (~/.showeq/loot.db for Live, ~/.showeq/eql/loot.db for EQL).
+let lootNamespace = '.showeq';
+export function setLootNamespace(ns: string): void {
+  lootNamespace = ns || '.showeq';
+}
+
+// Desktop build reads loot.db directly via tauri-plugin-sql (no HTTP host),
+// re-opening if the namespace (server) changed.
+let tauriDb: { ns: string; db: Promise<Database> } | null = null;
 async function fetchLootTauri(limit: number): Promise<LootRecord[]> {
-  if (!tauriDb) {
-    tauriDb = (async () => {
+  if (!tauriDb || tauriDb.ns !== lootNamespace) {
+    const ns = lootNamespace;
+    const db = (async () => {
       const { default: SqlDatabase } = await import('@tauri-apps/plugin-sql');
       const { homeDir, join } = await import('@tauri-apps/api/path');
-      return SqlDatabase.load(`sqlite:${await join(await homeDir(), '.showeq', 'loot.db')}`);
+      return SqlDatabase.load(`sqlite:${await join(await homeDir(), ns, 'loot.db')}`);
     })();
+    tauriDb = { ns, db };
   }
-  const db = await tauriDb;
+  const db = await tauriDb.db;
   return db.select<LootRecord[]>(RECENT_LOOT_SQL.replace('LIMIT ?', 'LIMIT $1'), [
     Math.max(1, Math.floor(limit)),
   ]);
