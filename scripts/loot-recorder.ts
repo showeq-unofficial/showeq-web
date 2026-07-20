@@ -4,13 +4,16 @@
 // (src/recorder/core.ts), and persists to a bun:sqlite DB.
 //
 //   bun scripts/loot-recorder.ts [ws://host:port] [--db PATH] [--looter NAME]
+//                                [--serve-port N | --no-serve]
 //
-// Defaults: ws://localhost:9090, ~/.showeq/loot.db. Ctrl-C to stop.
+// Defaults: ws://localhost:9090, ~/.showeq/loot.db, HTTP query API on :9092
+// (for the web loot view). Ctrl-C to stop.
 import { create, fromBinary, toBinary } from '@bufbuild/protobuf';
 import { EnvelopeSchema } from '../src/gen/seq/v1/events_pb';
 import { ClientEnvelopeSchema, SubscribeSchema, Topic } from '../src/gen/seq/v1/client_pb';
 import { LootRecorderCore } from '../src/recorder/core';
 import { BunSqliteSink } from './bun-sink';
+import { startLootServer } from './loot-server';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
@@ -22,10 +25,15 @@ function arg(flag: string): string | undefined {
 const url = process.argv[2]?.startsWith('ws') ? process.argv[2] : 'ws://localhost:9090';
 const dbPath = arg('--db') ?? join(homedir(), '.showeq', 'loot.db');
 const looter = arg('--looter') ?? '';
+const servePort = process.argv.includes('--no-serve') ? 0 : Number(arg('--serve-port')) || 9092;
 
 const sink = new BunSqliteSink(dbPath);
 const core = new LootRecorderCore(sink, looter);
 console.log(`loot-recorder → ${url}   db=${dbPath}`);
+if (servePort) {
+  startLootServer(dbPath, servePort);
+  console.log(`loot API      → http://localhost:${servePort}/api/loot`);
+}
 
 let backoff = 250;
 let stopping = false;

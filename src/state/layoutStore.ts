@@ -143,6 +143,8 @@ function loadInitialStatusBarVisible(): boolean {
 }
 
 interface LayoutState {
+  // Which top-level view fills the center area: the live map, or the loot browser.
+  viewMode: 'map' | 'loot';
   visibility: Record<PanelKey, boolean>;
   dockLocation: Record<PanelKey, DockLocation>;
   panelOrder: Record<RailSide, PanelKey[]>;
@@ -155,6 +157,7 @@ interface LayoutState {
   // the space. A thin reopen strip is rendered in App when collapsed.
   railCollapsed: { left: boolean; right: boolean };
 
+  setViewMode: (v: 'map' | 'loot') => void;
   togglePanel: (k: PanelKey) => void;
   hidePanel: (k: PanelKey) => void;
   setPanelsLocked: (v: boolean) => void;
@@ -193,6 +196,7 @@ const jsonStorage: PersistStorage<unknown> = {
 export const useLayoutStore = create<LayoutState>()(
   persist(
     (set, get) => ({
+      viewMode:     'map',
       visibility:   loadInitialVisibility(),
       dockLocation: loadInitialDockLocation(),
       panelOrder:   loadInitialPanelOrder(),
@@ -206,6 +210,7 @@ export const useLayoutStore = create<LayoutState>()(
         set((s) => ({ visibility: { ...s.visibility, [k]: !s.visibility[k] } })),
       hidePanel: (k) =>
         set((s) => ({ visibility: { ...s.visibility, [k]: false } })),
+      setViewMode: (v) => set({ viewMode: v }),
       setPanelsLocked: (v) => set({ panelsLocked: v }),
       setStatusBarVisible: (v) => set({ statusBarVisible: v }),
       setLeftRailWidth: (dx) =>
@@ -280,6 +285,7 @@ export const useLayoutStore = create<LayoutState>()(
       // Persist data fields only — actions stay on the store but don't
       // need to round-trip through localStorage.
       partialize: (state) => ({
+        viewMode: state.viewMode,
         visibility: state.visibility,
         dockLocation: state.dockLocation,
         panelOrder: state.panelOrder,
