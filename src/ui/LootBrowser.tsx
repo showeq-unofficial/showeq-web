@@ -5,6 +5,7 @@ import {
 } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { fetchLoot, formatCoin, lootApiBase, type LootRecord } from '@/lib/lootApi';
+import { ItemIcon } from './ItemIcon';
 
 const ROW_HEIGHT = 24;
 const POLL_MS = 10_000;
@@ -19,7 +20,18 @@ const fmtTime = (ts: number) => {
 const col = createColumnHelper<LootRecord>();
 const columns = [
   col.accessor('ts', { header: 'Time', size: 96, cell: (i) => fmtTime(i.getValue()) }),
-  col.accessor('item_name', { header: 'Item', size: 220 }),
+  col.accessor('item_name', {
+    header: 'Item', size: 230,
+    // `icon` is resolved upstream (window icon, or borrowed by item_id).
+    cell: (i) => (
+      <span className="flex min-w-0 items-center gap-1.5">
+        {i.row.original.icon
+          ? <ItemIcon icon={i.row.original.icon} size={18} />
+          : <span className="w-[18px] shrink-0" />}
+        <span className="truncate">{i.row.original.item_name}</span>
+      </span>
+    ),
+  }),
   col.accessor('item_id', {
     header: 'ID', size: 64,
     cell: (i) => <span className="text-muted-foreground">{i.getValue() ?? ''}</span>,
@@ -93,6 +105,12 @@ export function LootBrowser({ daemonUrl }: { daemonUrl: string }) {
     [rows],
   );
 
+  const iconByItemId = useMemo(() => {
+    const m = new Map<number, number>();
+    for (const r of rows) if (r.item_id != null && r.icon != null && !m.has(r.item_id)) m.set(r.item_id, r.icon);
+    return m;
+  }, [rows]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return rows.filter((r) => {
@@ -116,8 +134,15 @@ export function LootBrowser({ daemonUrl }: { daemonUrl: string }) {
     return { count: filtered.length, items: items.size, mobs: mobs.size, coin };
   }, [filtered]);
 
+  // Borrow an icon for message rows from a window row with the same item_id.
+  const resolvedRows = useMemo(
+    () => filtered.map((r) =>
+      r.icon != null || r.item_id == null ? r : { ...r, icon: iconByItemId.get(r.item_id) ?? null }),
+    [filtered, iconByItemId],
+  );
+
   const table = useReactTable({
-    data: filtered,
+    data: resolvedRows,
     columns,
     state: { sorting },
     onSortingChange: setSorting,
