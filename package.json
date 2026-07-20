@@ -10,6 +10,7 @@
     "gen": "buf generate proto",
     "typecheck": "tsc -b --noEmit",
     "smoke": "bun scripts/smoke-test.ts",
+    "record": "bun scripts/loot-recorder.ts",
     "test": "vitest run",
     "test:e2e": "playwright test",
     "tauri:dev": "bunx tauri dev",
