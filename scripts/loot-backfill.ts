@@ -38,6 +38,7 @@ while (off + 4 <= buf.length) {
   }
   off += len;
 }
+core.flush();
 
 console.log(`ingested ${envs} envelopes → ${core.count()} loot rows → ${dbPath}`);
 sink.close();

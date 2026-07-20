@@ -66,6 +66,7 @@ function connect(): void {
 function shutdown(): void {
   if (stopping) return;
   stopping = true;
+  core.flush();
   console.log(`\nrecorded ${core.count()} loot rows → ${dbPath}`);
   sink.close();
   process.exit(0);
