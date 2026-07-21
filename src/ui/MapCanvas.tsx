@@ -1504,8 +1504,14 @@ function HoverTip({
   const isDrop = spawn.type === SpawnType.DROP;
   const baseName = spawn.name || '(unnamed)';
   const display = spawn.lastName ? `${baseName} (${spawn.lastName})` : baseName;
-  const hpPct =
-    spawn.hpMax > 0 ? Math.round((spawn.hpCur / spawn.hpMax) * 100) : null;
+  // The self spawn record carries no usable HP — the daemon routes player
+  // vitals through player_stats, and SpawnUpdated has no hp_max field at all.
+  // Read your own HP from stats(), same as the pinned row in SpawnList.
+  const isSelf = spawn.id === store.player()?.id;
+  const stats = isSelf ? store.stats() : undefined;
+  const hpCur = isSelf ? (stats?.hpCur ?? 0) : spawn.hpCur;
+  const hpMax = isSelf ? (stats?.hpMax ?? 0) : spawn.hpMax;
+  const hpPct = hpMax > 0 ? Math.round((hpCur / hpMax) * 100) : null;
   const cls = classNameOf(spawn.class);
   return (
     <div

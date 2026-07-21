@@ -50,7 +50,14 @@ export function TargetWindow({
   // EQL mobs can be multiclass — show e.g. "SHD/DRU/MNK"; single-class mobs
   // fall back to the abbreviation ("WAR"). 0/no class renders blank.
   const classLabel = classDisplay(spawn.classMask, spawn.class, { short: true });
-  const hpPct = spawn.hpMax > 0 ? Math.max(0, Math.min(100, (spawn.hpCur / spawn.hpMax) * 100)) : 0;
+  // Targeting yourself is reachable (the pinned SpawnList row and the map dot
+  // are both selectable), and the self spawn record has no usable HP — the
+  // daemon routes player vitals through player_stats. Read stats() for self.
+  const isSelf = spawn.id === store.player()?.id;
+  const selfStats = isSelf ? store.stats() : undefined;
+  const hpCur = isSelf ? (selfStats?.hpCur ?? 0) : spawn.hpCur;
+  const hpMax = isSelf ? (selfStats?.hpMax ?? 0) : spawn.hpMax;
+  const hpPct = hpMax > 0 ? Math.max(0, Math.min(100, (hpCur / hpMax) * 100)) : 0;
 
   const effects = store.effectsFor(spawn.id);
   const snap = store.spawnEffectsState();
@@ -93,7 +100,7 @@ export function TargetWindow({
           <div className="flex items-baseline justify-between text-[10px] uppercase tracking-wide text-muted-foreground">
             <span>HP</span>
             <span className="font-mono normal-case tracking-normal text-foreground">
-              {spawn.hpMax > 0 ? `${Math.round(hpPct)}%` : '—'}
+              {hpMax > 0 ? `${Math.round(hpPct)}%` : '—'}
             </span>
           </div>
           <div className="mt-0.5 h-2 overflow-hidden rounded bg-bg-base">
