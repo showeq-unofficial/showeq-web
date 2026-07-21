@@ -100,6 +100,16 @@ export function SpawnInspectPanel({
             <span className="w-16 shrink-0 text-muted-foreground">HP</span>
             <span>{hpPct !== null ? `${hpPct}%` : '—'}</span>
           </div>
+          {/* Only the daemon can resolve a guild name (it keys guild_id +
+              guild_server_id against the zone's guild roster), so an unguilded
+              spawn and one whose guild hasn't been named yet both arrive empty.
+              Hide the row rather than showing a bare id. */}
+          {spawn.guildTag && (
+            <div className="flex items-baseline gap-1.5">
+              <span className="w-16 shrink-0 text-muted-foreground">Guild</span>
+              <span className="truncate">{spawn.guildTag}</span>
+            </div>
+          )}
 
           {anyEquip && (
             <div className="mt-1 border-t border-border pt-1">

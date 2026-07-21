@@ -1489,8 +1489,8 @@ export function MapCanvas({
 
 // Hover tooltip — mirrors the shape of showeq-c's MapTip popup
 // (map.cpp:4438-4523) but trimmed to the fields the daemon ships:
-// no race string, no guild tag. Positioned at the cursor with a small
-// down-right offset to match the showeq-c +15px nudge.
+// no race string. Positioned at the cursor with a small down-right
+// offset to match the showeq-c +15px nudge.
 function HoverTip({
   store,
   hover,
@@ -1527,6 +1527,11 @@ function HoverTip({
           {hpPct != null ? ` · ${hpPct}% HP` : ''}
           {cls ? ` · ${cls}` : ''}
         </div>
+      )}
+      {/* Guild tag, showeq-c's MapTip carried one too. Empty for unguilded
+          spawns and for guilds the daemon hasn't seen named on the wire yet. */}
+      {spawn.guildTag && (
+        <div className="truncate text-muted-foreground">&lt;{spawn.guildTag}&gt;</div>
       )}
       <div className="tabular-nums text-muted-foreground">
         {/* Show coords in EQ /loc convention (Y, X, Z) so they match the
